@@ -558,7 +558,7 @@ def read_genome(file_path):
     genome = defaultdict(str)
     with open(file_path) as f:
         for record in SeqIO.parse(f, 'fasta'):
-            genome[record.id] = record.seq
+            genome[record.id] = record.seq.seq
     return genome
     
 
@@ -567,21 +567,17 @@ def read_genes(file_path):
     gene, exon = None, None
     prev = None
     for line in process_file(file_path):
-        try:
-            if line[0] == '#':
-                continue
-            if line[2] == 'transcript':
-                if gene:
-                    genes[gene.name] = gene
-                gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
-            elif line[2] == 'exon':
-                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
-                gene.append_exons(exon)
-                if prev: prev.next_exon = exon
-                prev = exon
-        except Exception as exc:
-            print(line)
-            raise exc
+        if line[0] == '#':
+            continue
+        if line[2] == 'transcript':
+            if gene:
+                genes[gene.name] = gene
+            gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
+        elif line[2] == 'exon':
+            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
+            gene.append_exons(exon)
+            if prev: prev.next_exon = exon
+            prev = exon
     if gene:
         genes[gene.name] = gene
     return genes
