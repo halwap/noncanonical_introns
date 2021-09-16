@@ -558,8 +558,7 @@ def read_genome(file_path):
     genome = defaultdict(str)
     with open(file_path) as f:
         for record in SeqIO.parse(f, 'fasta'):
-            print(record.id, record.seq)
-            raise Exception
+            genome[record.id] = record.seq
     return genome
     
 
