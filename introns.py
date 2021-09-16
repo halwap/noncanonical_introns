@@ -1,3 +1,4 @@
+from Bio import SeqIO
 from collections import defaultdict
 from copy import copy
 
@@ -556,11 +557,9 @@ def process_file(file_path):
 def read_genome(file_path):
     genome = defaultdict(str)
     with open(file_path) as f:
-        for line in f.readlines():
-            if line[0] == '>':
-                gene = line.strip()[1:]
-            else:
-                genome[gene] += line.strip()
+        for record in SeqIO.parse(f):
+            print(record.id, record.seq)
+            raise Exception
     return genome
     
 
