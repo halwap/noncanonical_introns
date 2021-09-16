@@ -350,7 +350,7 @@ class Intron(GenomicSequence):
         
         if not self.prev_exon or not self.next_exon:
             return
-        working_left_sequence, working_right_sequence = self.prev_exon.sequence, self.next_exon.sequence
+        left_margin_sequence, right_margin_sequence = self.prev_exon.sequence, self.next_exon.sequence
         i = 1
         # start checking for repeats left from the junction
         check = 'left'
@@ -358,13 +358,13 @@ class Intron(GenomicSequence):
             new_prev_exon = copy(self.prev_exon)
             new_next_exon = copy(self.next_exon)
             if check == 'left':  # checking to the left
-                if i > len(working_left_sequence)\
+                if i > len(left_margin_sequence)\
                         or i > len(self.sequence)\
-                        or working_left_sequence[-i] != self.sequence[-i]:
+                        or left_margin_sequence[-i] != self.sequence[-i]:
                     check = 'right'
                     i = 0
                     continue
-                new_seq = working_left_sequence[-i:] + self.sequence[:-i]
+                new_seq = left_margin_sequence[-i:] + self.sequence[:-i]
                 new_prev_exon.sequence = new_prev_exon.sequence[:-i]
                 new_prev_exon.scaffold_end = new_prev_exon.scaffold_end - i
                 new_next_exon.sequence = self.sequence[-i:] + new_next_exon.sequence
@@ -374,11 +374,13 @@ class Intron(GenomicSequence):
                                        scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
             else:  # checking to the right
-                if i + 1 > len(mrs) or i + 1 > len(self.sequence) or self.sequence[i] != mrs[i]:
+                if i + 1 > len(right_margin_sequence)\
+                        or i + 1 > len(self.sequence)\
+                        or self.sequence[i] != right_margin_sequence[i]:
                     break
-                new_seq = self.sequence[i:]+mrs[:i]
-                new_prev_exon.sequence = new_prev_exon.sequence+self.sequence[:i]
-                new_prev_exon.scaffold_end = new_prev_exon.scaffold_end+i
+                new_seq = self.sequence[i:] + right_margin_sequence[:i]
+                new_prev_exon.sequence = new_prev_exon.sequence + self.sequence[:i]
+                new_prev_exon.scaffold_end = new_prev_exon.scaffold_end + i
                 new_next_exon.sequence = new_next_exon.sequence[i:]
                 new_next_exon.scaffold_start = new_next_exon.scaffold_start+i
                 # creating new variation moved to the right
@@ -481,38 +483,42 @@ class Intron(GenomicSequence):
         else:
             prev = None
         i = 0
-        
-        if complimentary(seq[3], seq[-6]) and complimentary(seq[4], seq[-7]):
-            i = 11
-            if complimentary(seq[5], seq[-8]):  # 10
-                i = 10
-                if seq[4] == 'A' and seq[-7] == 'T':  # 9
-                    i = 9
-                    if seq[3] == "C" and seq[-6] == 'G':  # 8
-                        i = 8
-                        if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]):  # 7/6
-                            i = (isR(nex[0]) and 7) or (nex[2] == 'C' and 6)
-                            if isR(nex[0]) and nex[2] == 'C':  # 3
-                                i = 3
-                                if seq[5] == 'G' and seq[-8] == 'C':  # 2
-                                    i = 2
-                                    if nex[1] == 'A':  # 1
-                                        i = 1
-                        elif nex and isR(seq[0]) and isR(nex[0]) and nex[2] == 'C':  # 5,4
-                            if prev and isY(prev):
-                                i = 5
-                            elif isY(seq[-1]):
-                                i = 4
-                                
-        self.is_nonconventional = i
-        self.best_nonconv_var = self.is_nonconventional
-        if not self.variations:
-            return
-        for var in self.variations:
-            var.nonconventional_version()
-            if (var.is_nonconventional and var.is_nonconventional < self.best_nonconv_var) or\
-                    (var.is_nonconventional and self.best_nonconv_var == 0):
-                self.best_nonconv_var = var.is_nonconventional
+        try:
+            if complimentary(seq[3], seq[-6]) and complimentary(seq[4], seq[-7]):
+                i = 11
+                if complimentary(seq[5], seq[-8]):  # 10
+                    i = 10
+                    if seq[4] == 'A' and seq[-7] == 'T':  # 9
+                        i = 9
+                        if seq[3] == "C" and seq[-6] == 'G':  # 8
+                            i = 8
+                            if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]):  # 7/6
+                                i = (isR(nex[0]) and 7) or (nex[2] == 'C' and 6)
+                                if isR(nex[0]) and nex[2] == 'C':  # 3
+                                    i = 3
+                                    if seq[5] == 'G' and seq[-8] == 'C':  # 2
+                                        i = 2
+                                        if nex[1] == 'A':  # 1
+                                            i = 1
+                            elif nex and isR(seq[0]) and isR(nex[0]) and nex[2] == 'C':  # 5,4
+                                if prev and isY(prev):
+                                    i = 5
+                                elif isY(seq[-1]):
+                                    i = 4
+
+            self.is_nonconventional = i
+            self.best_nonconv_var = self.is_nonconventional
+            if not self.variations:
+                return
+            for var in self.variations:
+                var.nonconventional_version()
+                if (var.is_nonconventional and var.is_nonconventional < self.best_nonconv_var) or\
+                        (var.is_nonconventional and self.best_nonconv_var == 0):
+                    self.best_nonconv_var = var.is_nonconventional
+        except Exception as exc:
+            print(self.sequence)
+            print(self.scaffold_name, self.scaffold_start, self.scaffold_end)
+            raise exc
         
 
 class Exon(GenomicSequence):
