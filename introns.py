@@ -567,17 +567,21 @@ def read_genes(file_path):
     gene, exon = None, None
     prev = None
     for line in process_file(file_path):
-        if line[0] == '#':
-            continue
-        if line[2] == 'transcript':
-            if gene:
-                genes[gene.name] = gene
-            gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
-        elif line[2] == 'exon':
-            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
-            gene.append_exons(exon)
-            if prev: prev.next_exon = exon
-            prev = exon
+        try:
+            if line[0] == '#':
+                continue
+            if line[2] == 'transcript':
+                if gene:
+                    genes[gene.name] = gene
+                gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
+            elif line[2] == 'exon':
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
+                gene.append_exons(exon)
+                if prev: prev.next_exon = exon
+                prev = exon
+        except Exception as exc:
+            print(line)
+            raise exc
     if gene:
         genes[gene.name] = gene
     return genes
