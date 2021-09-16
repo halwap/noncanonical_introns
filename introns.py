@@ -558,7 +558,7 @@ def read_genome(file_path):
     genome = defaultdict(str)
     with open(file_path) as f:
         for record in SeqIO.parse(f, 'fasta'):
-            genome[record.id] = record.seq.seq
+            genome[record.id] = str(record.seq.seq)
     return genome
     
 
