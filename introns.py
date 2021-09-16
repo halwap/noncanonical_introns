@@ -47,8 +47,8 @@ class GenomicSequence:
 
 
 class Gene(GenomicSequence):
-    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='', transcript=None, exons=None, introns=None,
-                 name=''):
+    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
+                 transcript=None, exons=None, introns=None, name=''):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
@@ -151,20 +151,19 @@ class Gene(GenomicSequence):
             self.introns = []
             start, end = 0, 0
             for exon in self.exons:
-                prev_e = exon.prev_exon
+                prev_exon = exon.prev_exon
                 end = exon.scaffold_start
                 if start:
                     if self.strand == '+':
                         sequence = self.sequence[start - self.scaffold_start:end - self.scaffold_start]
                     elif self.strand == '-':
                         sequence = self.sequence[- end + self.scaffold_end: - start + self.scaffold_end]
-                    intr=Intron(self.scaffold_name, scaffold_start = start, scaffold_end = end, strand=self.strand, sequence=sequence, gene=self, prev_exon=prev_e, next_exon=exon)
-                    self.append_introns(intr)
-                    
-                    prev_e.next_intron = intr
-                    exon.prev_intron=intr
-
-                    prev_e=exon
+                    intron = Intron(self.scaffold_name, scaffold_start=start, scaffold_end=end, strand=self.strand,
+                                    sequence=sequence, gene=self, prev_exon=prev_exon, next_exon=exon)
+                    self.append_introns(intron)
+                    prev_exon.next_intron = intron
+                    exon.prev_intron=intron
+                    prev_exon = exon
                     # elif self.strand == '-':
                     #     self.append_introns(Intron(self.scaffold_name, end, start))
                     # else:
@@ -226,8 +225,9 @@ class Intron(GenomicSequence):
     is_conventional = int
     is_nonconventional = int
 
-    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None, margin_left=0,
-                 margin_right=0, margin_left_seq='', margin_right_seq='', prev_exon=None, next_exon=None):
+    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
+                 margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
+                 prev_exon=None, next_exon=None):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -240,10 +240,9 @@ class Intron(GenomicSequence):
         self.is_nonconventional = 0
         self.prev_exon = prev_exon
         self.next_exon = next_exon
-        self.best_conv_var=0 #variation of the intron with the best conventional version
-        self.best_nonconv_var=0 #variation of the intron with the best nonconventional version
+        self.best_conv_var = 0  # variation of the intron with the best conventional version
+        self.best_nonconv_var = 0  # variation of the intron with the best nonconventional version
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
-        
         if self.strand=='-':
             self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end, -self.scaffold_start + self.gene.scaffold_end
         elif self.strand=='+':
@@ -285,59 +284,61 @@ class Intron(GenomicSequence):
     #     else:
     #        return 0
 
-    def movable_boundary(self):
-        # moglem zepsuc
-        # ja zaraz jeszcze bardziej popsuje
-        """
-        Check if there are repeats on the intron junctions so the intron position could be shifted without changing
-        transcript sequence. If there are, add new possible introns to self.variations.
-        """
-        i = 1
-        # start checking for repeats left from the junction
-        check = 'left'
-
-        while True:
-            left_base_index = self.margin_left - i
-            right_base_index = -self.margin_right - i
-            if left_base_index < 0 or right_base_index > -1:
-                # index out of boundary, change direction
-                if check == 'left':
-                    # end of going left, time to go right from the junction
-                    check = 'right'
-                    i = 0
-                    continue
-                else:
-                    # end of going right, both directions checked
-                    break
-
-            left_base = self.sequence[left_base_index]
-            right_base = self.sequence[right_base_index]
-            if left_base == right_base:
-                # there is a repeat on the junction
-                if check == 'left':
-                    new_left_margin, new_right_margin = self.margin_left - i, self.margin_right + i
-                else:
-                    new_left_margin, new_right_margin = self.margin_left - (i - 1), self.margin_right + (i - 1)
-                # TODO tu musi byc zmieniona sekwencja nowej wariacji
-                new_variation = Intron(self.scaffold_name, self.scaffold_start, self.scaffold_end, margin_left=new_left_margin,
-                                       margin_right=new_right_margin, sequence=self.sequence)
-                self.variations.append(new_variation)
-            else:
-                if check == 'left':
-                    # end of going left, time to go right from the junction
-                    check = 'right'
-                    i = 0
-                    continue
-                else:
-                    # end of going right, both directions checked
-                    break
-
-            if check == 'left':
-                # going further left
-                i += 1
-            else:
-                # going further right
-                i -= 1
+    # not used at 16/09/21
+    # def movable_boundary(self):
+    #     # moglem zepsuc
+    #     # ja zaraz jeszcze bardziej popsuje
+    #     """
+    #     Check if there are repeats on the intron junctions so the intron position could be shifted without changing
+    #     transcript sequence. If there are, add new possible introns to self.variations.
+    #     """
+    #     i = 1
+    #     # start checking for repeats left from the junction
+    #     check = 'left'
+    #
+    #     while True:
+    #         left_base_index = self.margin_left - i
+    #         right_base_index = -self.margin_right - i
+    #         if left_base_index < 0 or right_base_index > -1:
+    #             # index out of boundary, change direction
+    #             if check == 'left':
+    #                 # end of going left, time to go right from the junction
+    #                 check = 'right'
+    #                 i = 0
+    #                 continue
+    #             else:
+    #                 # end of going right, both directions checked
+    #                 break
+    #
+    #         left_base = self.sequence[left_base_index]
+    #         right_base = self.sequence[right_base_index]
+    #         if left_base == right_base:
+    #             # there is a repeat on the junction
+    #             if check == 'left':
+    #                 new_left_margin, new_right_margin = self.margin_left - i, self.margin_right + i
+    #             else:
+    #                 new_left_margin, new_right_margin = self.margin_left - (i - 1), self.margin_right + (i - 1)
+    #             # TODO tu musi byc zmieniona sekwencja nowej wariacji
+    #             new_variation = Intron(self.scaffold_name, self.scaffold_start, self.scaffold_end,
+    #                                    margin_left=new_left_margin, margin_right=new_right_margin,
+    #                                    sequence=self.sequence)
+    #             self.variations.append(new_variation)
+    #         else:
+    #             if check == 'left':
+    #                 # end of going left, time to go right from the junction
+    #                 check = 'right'
+    #                 i = 0
+    #                 continue
+    #             else:
+    #                 # end of going right, both directions checked
+    #                 break
+    #
+    #         if check == 'left':
+    #             # going further left
+    #             i += 1
+    #         else:
+    #             # going further right
+    #             i -= 1
         
     def movable_boundary_no_margins(self):
         # moglem zepsuc
@@ -349,40 +350,41 @@ class Intron(GenomicSequence):
         
         if not self.prev_exon or not self.next_exon:
             return
-        mls, mrs = self.prev_exon.sequence, self.next_exon.sequence
-        
+        working_left_sequence, working_right_sequence = self.prev_exon.sequence, self.next_exon.sequence
         i = 1
         # start checking for repeats left from the junction
         check = 'left'
-        
         while True:
             new_prev_exon = copy(self.prev_exon)
             new_next_exon = copy(self.next_exon)
-            if check == 'left': #checking to the left
-                if i > len(mls) or i > len(self.sequence) or mls[-i] != self.sequence[-i]:
+            if check == 'left':  # checking to the left
+                if i > len(working_left_sequence)\
+                        or i > len(self.sequence)\
+                        or working_left_sequence[-i] != self.sequence[-i]:
                     check = 'right'
                     i = 0
                     continue
-                new_seq=mls[-i:]+self.sequence[:-i]
+                new_seq = working_left_sequence[-i:] + self.sequence[:-i]
                 new_prev_exon.sequence = new_prev_exon.sequence[:-i]
-                new_prev_exon.scaffold_end = new_prev_exon.scaffold_end-i
-                new_next_exon.sequence = self.sequence[-i:]+new_next_exon.sequence
+                new_prev_exon.scaffold_end = new_prev_exon.scaffold_end - i
+                new_next_exon.sequence = self.sequence[-i:] + new_next_exon.sequence
                 new_next_exon.scaffold_start = new_next_exon.scaffold_start-i
-                #creating new variation moved to the left
-                new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i, scaffold_end=self.scaffold_end - i, \
-                                       gene=self.gene, sequence=new_seq, prev_exon=new_prev_exon, next_exon=new_next_exon)
-                
-            else: #checking to the right
+                # creating new variation moved to the left
+                new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i,
+                                       scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
+            else:  # checking to the right
                 if i + 1 > len(mrs) or i + 1 > len(self.sequence) or self.sequence[i] != mrs[i]:
                     break
-                new_seq=self.sequence[i:]+mrs[:i]
+                new_seq = self.sequence[i:]+mrs[:i]
                 new_prev_exon.sequence = new_prev_exon.sequence+self.sequence[:i]
                 new_prev_exon.scaffold_end = new_prev_exon.scaffold_end+i
                 new_next_exon.sequence = new_next_exon.sequence[i:]
                 new_next_exon.scaffold_start = new_next_exon.scaffold_start+i
-                #creating new variation moved to the right
-                new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i, scaffold_end=self.scaffold_end + i, \
-                                       gene=self.gene, sequence=new_seq, prev_exon=new_prev_exon, next_exon=new_next_exon)
+                # creating new variation moved to the right
+                new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i,
+                                       scaffold_end=self.scaffold_end + i, gene=self.gene, sequence=new_seq,
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
             self.variations.append(new_variation)
             i += 1
 
@@ -402,12 +404,9 @@ class Intron(GenomicSequence):
         """Check if intron may be nonconventional according to our current knowledge, meaning it can form
         secondary structure in specific positions. Also check if variations with shifted junctions may be
         nonconventional."""
-        #funkcje complimentary wyciagnelam poza te funkcje
-
+        # funkcje complimentary wyciagnelam poza te funkcje
         left_anchor = self.sequence[3: 5]
         right_anchor = self.sequence[-7:-5]
-
-        # try:
         if complimentary(left_anchor[0], right_anchor[1]) and complimentary(left_anchor[1], right_anchor[0]):
             return True
         else:
@@ -420,7 +419,7 @@ class Intron(GenomicSequence):
             
     def conventional_version(self):
         def rate(wersja):
-            wagi={0:0, 1:1, 2:3, 3:5, 4:7, 5:2, 6:4, 7:6, 8:8}
+            wagi = {0: 0, 1: 1, 2: 3, 3: 5, 4: 7, 5: 2, 6: 4, 7: 6, 8: 8}
             return wagi.get(wersja)
         
         if self.sequence[0:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
@@ -430,19 +429,17 @@ class Intron(GenomicSequence):
         
         if not self.prev_exon or not self.next_exon:
             return
-        mls, mrs = self.prev_exon.sequence[-3:], self.next_exon.sequence[:3]
-        
-        #mls, mrs = self.margin_left_seq, self.margin_right_seq
-        #if check == 0:
+        left_margin_seq, right_margin_seq = self.prev_exon.sequence[-3:], self.next_exon.sequence[:3]
         if self.sequence[-3] == 'C':
             i = 3
-            if mls and mls[-1] == 'G' and \
-                mrs and mrs[0] == 'G':
+            if left_margin_seq and left_margin_seq[-1] == 'G' \
+                    and right_margin_seq and right_margin_seq[0] == 'G':
                 i = 2
-                if len(mls) > 1 and len(mrs) > 1 and \
-                    mls[-2] == 'A' and mrs[1] == 'T':
+                if len(left_margin_seq) > 1 and left_margin_seq[-2] == 'A'\
+                        and len(right_margin_seq) > 1 and right_margin_seq[1] == 'T':
                     i = 1
-        if self.sequence[1] == 'C': i += 4
+        if self.sequence[1] == 'C':
+            i += 4
         self.is_conventional = i
         # else:  # if check = 1
         #     if self.sequence[2] == 'G':
@@ -455,71 +452,72 @@ class Intron(GenomicSequence):
         #                 i = 1
         #     if self.sequence[-2] == 'G': i += 4
         #     self.is_conventional = i
-
         self.best_conv_var = self.is_conventional
         if not self.variations:
             return
         for var in self.variations:
             var.conventional_version()
-            if (var.is_conventional and rate(var.is_conventional)<rate(self.best_conv_var)) or (var.is_conventional and self.best_conv_var==0):
+            if (var.is_conventional and rate(var.is_conventional) < rate(self.best_conv_var))\
+                    or (var.is_conventional and self.best_conv_var == 0):
                 self.best_conv_var = var.is_conventional
         
-
     def nonconventional_version(self):
         def isR(N):
             if N in ["G","A"]: return True
-            return False
+            else: return False
+
         def isY(N):
             if N in ["C", "T"]: return True
-            return False
-        seq=self.sequence
+            else: return False
+
+        seq = self.sequence
         if self.next_exon and self.next_exon.sequence:
-            nex=self.next_exon.sequence[:3]
-            if len(nex)==2:
-                nex=nex+" "
-            elif len(nex)==1:
-                nex=nex+"  "
-        else: nex=None
+            nex = self.next_exon.sequence[:3]
+            nex = nex + ' ' * (3 - len(nex))
+        else:
+            nex = None
         if self.prev_exon and self.prev_exon.sequence:
-            prev=self.prev_exon.sequence[-1]
-        else: prev=None
-        i=0
+            prev = self.prev_exon.sequence[-1]
+        else:
+            prev = None
+        i = 0
         
-        if complimentary(seq[3],seq[-6]) and complimentary(seq[4],seq[-7]):
-            i=11
-            if complimentary(seq[5], seq[-8]): #10
-                i=10
-                if seq[4]=='A' and seq[-7]=='T': #9
-                    i=9
-                    if seq[3]=="C" and seq[-6]=='G': #8
-                        i=8
-                        if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]): #7/6
-                            i = (isR(nex[0]) and 7) or (nex[2]=='C' and 6)
-                            if isR(nex[0]) and nex[2]=='C': #3
-                                i=3
-                                if seq[5]=='G' and seq[-8]=='C': #2
-                                    i=2
-                                    if nex[1]=='A': #1
-                                        i=1        
-                        elif nex and isR(seq[0]) and isR(nex[0]) and nex[2]=='C': #5,4
+        if complimentary(seq[3], seq[-6]) and complimentary(seq[4], seq[-7]):
+            i = 11
+            if complimentary(seq[5], seq[-8]):  # 10
+                i = 10
+                if seq[4] == 'A' and seq[-7] == 'T':  # 9
+                    i = 9
+                    if seq[3] == "C" and seq[-6] == 'G':  # 8
+                        i = 8
+                        if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]):  # 7/6
+                            i = (isR(nex[0]) and 7) or (nex[2] == 'C' and 6)
+                            if isR(nex[0]) and nex[2] == 'C':  # 3
+                                i = 3
+                                if seq[5] == 'G' and seq[-8] == 'C':  # 2
+                                    i = 2
+                                    if nex[1] == 'A':  # 1
+                                        i = 1
+                        elif nex and isR(seq[0]) and isR(nex[0]) and nex[2] == 'C':  # 5,4
                             if prev and isY(prev):
-                                i=5
+                                i = 5
                             elif isY(seq[-1]):
-                                i=4
+                                i = 4
                                 
         self.is_nonconventional = i
-        self.best_nonconv_var=self.is_nonconventional
+        self.best_nonconv_var = self.is_nonconventional
         if not self.variations:
             return
-        
         for var in self.variations:
             var.nonconventional_version()
-            if (var.is_nonconventional and var.is_nonconventional<self.best_nonconv_var) or (var.is_nonconventional and self.best_nonconv_var==0):
+            if (var.is_nonconventional and var.is_nonconventional < self.best_nonconv_var) or\
+                    (var.is_nonconventional and self.best_nonconv_var == 0):
                 self.best_nonconv_var = var.is_nonconventional
         
 
 class Exon(GenomicSequence):
-    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='', prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
+    def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
+                 prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.prev_exon = prev_exon
         self.next_exon = next_exon
@@ -549,9 +547,9 @@ def process_file(file_path):
         raise exc
 
 
-def read_genome(file):
+def read_genome(file_path):
     genome = defaultdict(str)
-    with open(file) as f:
+    with open(file_path) as f:
         for line in f.readlines():
             if line[0] == '>':
                 gene = line.strip()[1:]
@@ -560,11 +558,11 @@ def read_genome(file):
     return genome
     
 
-def read_genes(file):
+def read_genes(file_path):
     genes = {}  # slownik genow
     gene, exon = None, None
     prev = None
-    for line in process_file(file):
+    for line in process_file(file_path):
         if line[0] == '#':
             continue
         if line[2] == 'transcript':
@@ -574,8 +572,8 @@ def read_genes(file):
         elif line[2] == 'exon':
             exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
             gene.append_exons(exon)
-            if prev: prev.next_exon=exon
-            prev=exon
+            if prev: prev.next_exon = exon
+            prev = exon
     if gene:
         genes[gene.name] = gene
     return genes
@@ -589,6 +587,7 @@ def complement(seq):
 
 def reverse_complement(seq):
     return complement(seq[::-1])
+
 
 def complimentary(n1, n2):
     if {n1, n2} in [{'A', 'T'}, {'C', 'G'}, {'G', 'T'}]:
