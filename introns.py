@@ -120,7 +120,7 @@ class Gene(GenomicSequence):
         to_be_joined = []
         start, end = None, None
         reverse = True if self.strand == '-' else False
-        exons_sorted = sorted(self.exons, key=lambda obj: obj.start, reverse=reverse)
+        exons_sorted = sorted(self.exons, key=lambda obj: obj.scaffold_start, reverse=reverse)
         if not reverse:
             for exon in exons_sorted:
                 start = exon.scaffold_start
