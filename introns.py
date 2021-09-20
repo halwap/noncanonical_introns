@@ -91,7 +91,7 @@ class Gene(GenomicSequence):
             elif self.strand == '-':
                 exon.sequence = self.sequence[- exon.scaffold_end + self.scaffold_end:- exon.scaffold_start + self.scaffold_end]
             else:
-                print(self.name, exon.scaffold_name, exon.scaffold_start, exon.scaffold_end)
+                # print(self.name, exon.scaffold_name, exon.scaffold_start, exon.scaffold_end)
                 # raise Exception('co jest')
         transcript_sequence = self.get_transcript_sequence()
         self.transcript = Transcript(self.scaffold_name, self.scaffold_start, self.scaffold_end, strand=self.strand,
