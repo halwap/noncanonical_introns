@@ -60,6 +60,7 @@ class Gene(GenomicSequence):
         self.expanded_sequence = ''
         self.expansion_left = 0
         self.expansion_right = 0
+        self.introns_dict = {}
 
     def append_exons(self, exon):
         self.exons.append(exon)
@@ -225,10 +226,11 @@ class Intron(GenomicSequence):
     variations = list
     is_conventional = int
     is_nonconventional = int
+    man_annotation = str
 
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
                  margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
-                 prev_exon=None, next_exon=None):
+                 prev_exon=None, next_exon=None, man_annotation=''):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -243,10 +245,12 @@ class Intron(GenomicSequence):
         self.next_exon = next_exon
         self.best_conv_var = 0  # variation of the intron with the best conventional version
         self.best_nonconv_var = 0  # variation of the intron with the best nonconventional version
+        self.man_annotation = man_annotation
+        self.man_variant = None
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
-        if self.strand=='-':
+        if self.strand == '-':
             self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end, -self.scaffold_start + self.gene.scaffold_end
-        elif self.strand=='+':
+        elif self.strand == '+':
             self.gene_start, self.gene_end = self.scaffold_start - self.gene.scaffold_start, self.scaffold_end - self.gene.scaffold_start
 
     # def intersect(self, other_intron):
@@ -348,7 +352,7 @@ class Intron(GenomicSequence):
         Check if there are repeats on the intron junctions so the intron position could be shifted without changing
         transcript sequence. If there are, add new possible introns to self.variations.
         """
-        
+
         if not self.prev_exon or not self.next_exon:
             return
         left_margin_sequence, right_margin_sequence = self.prev_exon.sequence, self.next_exon.sequence
@@ -390,6 +394,10 @@ class Intron(GenomicSequence):
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
             self.variations.append(new_variation)
             i += 1
+        self.gene.introns_dict[(self.scaffold_start, self.scaffold_end)] = self
+        for var in self.variations:
+            self.gene.introns_dict[(var.scaffold_start, var.scaffold_end)] = self
+
 
     def check_conventional(self):
         """ Check if the intron junctions suggest the intron is conventional."""
@@ -520,6 +528,22 @@ class Intron(GenomicSequence):
             print(self.sequence)
             print(self.scaffold_name, self.scaffold_start, self.scaffold_end)
             raise exc
+
+    def add_manual_annotation(self, man_annotation, start, end):
+        self.man_annotation = man_annotation
+        if start == self.scaffold_start and end == self.scaffold_end:
+            self.man_variant = self
+        else:
+            for var in self.variations:
+                if start == var.scaffold_start and end == var.scaffold_end:
+                    self.man_variant = var
+                    break
+        if not self.man_variant:
+            print(self)
+            print(man_annotation)
+
+    #def annotate_variants(self):
+
         
 
 class Exon(GenomicSequence):
