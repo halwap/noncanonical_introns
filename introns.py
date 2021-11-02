@@ -227,10 +227,13 @@ class Intron(GenomicSequence):
     is_conventional = int
     is_nonconventional = int
     man_annotation = str
+    test_annotation = str
+
 
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
                  margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
-                 prev_exon=None, next_exon=None, man_annotation=''):
+                 prev_exon=None, next_exon=None, man_annotation='', test_annotation='', test_global_annotation='',
+                 test_score=0, gc_content=0.0, polimyridine_tract=0.0):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -247,6 +250,17 @@ class Intron(GenomicSequence):
         self.best_nonconv_var = 0  # variation of the intron with the best nonconventional version
         self.man_annotation = man_annotation
         self.man_variant = None
+        self.test_annotation = test_annotation
+        self.test_global_annotation = test_global_annotation
+        self.test_score = test_score
+        self.test_score_max = -1000
+        self.test_score_min = 1000
+        self.test_best_k_var = self
+        self.test_best_nk_var = self
+        self.canonical_borders = False
+        self.gc_content = gc_content
+        self.polimyridine_tract = polimyridine_tract
+        self.conserved_pairing_score = 0
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
         if self.strand == '-':
             self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end, -self.scaffold_start + self.gene.scaffold_end
@@ -542,9 +556,53 @@ class Intron(GenomicSequence):
             print(self)
             print(man_annotation)
 
-    #def annotate_variants(self):
+    def calculate_deka_score(self):
+        penta_b = self.sequence[3:13]
+        penta_e = self.sequence[-15:-5]
+        return calculate_pairing(penta_b, penta_e)
 
-        
+    def add_test_annotation(self):
+        self.set_test_score()
+        self.test_score_max = self.test_score
+        self.test_score_min = self.test_score
+        for var in self.variations:
+            var.set_test_score()
+            if var.test_score > self.test_score_max:
+                self.test_score_max = var.test_score
+                self.test_best_k_var = var
+            if var.test_score < self.test_score_min:
+                self.test_score_min = var.test_score
+                self.test_best_nk_var = var
+        if self.test_score_max > 5 and self.test_score_min >= -5:
+            self.test_global_annotation = 'intron_K'
+        elif self.test_score_min < -5 and self.test_score_max <= 5:
+            self.test_global_annotation = 'intron_NK'
+        elif self.test_score_min < -5 and self.test_score_max > 5:
+            self.test_global_annotation = 'intron_I'
+        else:
+            self.test_global_annotation = 'intron_NN'
+
+    def set_test_score(self):
+        self.polimyridine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
+        self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
+        if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
+            self.canonical_borders = True
+        else:
+            self.canonical_borders = False
+        if self.canonical_borders:
+            self.test_score += 10
+        if self.polimyridine_tract >= 0.6:
+            self.test_score += 3
+        self.test_score -= self.conserved_pairing_score
+        if self.test_score > 5:
+            self.test_annotation = 'intron_K'
+        elif self.test_score < -5:
+            self.test_annotation = 'intron_NK'
+        elif self.canonical_borders:
+            self.test_annotation = 'intron_I'
+        else:
+            self.test_annotation = 'intron_NN'
+
 
 class Exon(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
@@ -598,7 +656,7 @@ def read_genes(file_path):
                 genes[gene.name] = gene
             gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
         elif line[2] == 'exon':
-            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
+            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
             gene.append_exons(exon)
             if prev: prev.next_exon = exon
             prev = exon
@@ -622,3 +680,23 @@ def complimentary(n1, n2):
         return True
     else:
         return False
+
+
+def calculate_pairing(str1, str2):
+    if len(str1) != len(str2):
+        print(len(str1), len(str2))
+        print(str1, str2)
+        raise Exception
+    counter = 0
+    for i in range(len(str1)):
+        if complimentary(str1[i-1], str2[-i]): counter += 1
+    return counter
+
+
+def calculate_pyrimidine_content(seq):
+    count = 0
+    for char in seq:
+        if char == 'C' or char == 'T' or char == 'Y':
+            count += 1
+    return count/len(seq)
+
