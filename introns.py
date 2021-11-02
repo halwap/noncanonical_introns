@@ -656,7 +656,7 @@ def read_genes(file_path):
                 genes[gene.name] = gene
             gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
         elif line[2] == 'exon':
-            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon = prev)
+            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
             gene.append_exons(exon)
             if prev: prev.next_exon = exon
             prev = exon
