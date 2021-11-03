@@ -573,12 +573,19 @@ class Intron(GenomicSequence):
             if var.test_score < self.test_score_min:
                 self.test_score_min = var.test_score
                 self.test_best_nk_var = var
+
         if self.test_score_max > 5 and self.test_score_min >= -5:
             self.test_global_annotation = 'intron_K'
         elif self.test_score_min < -5 and self.test_score_max <= 5:
             self.test_global_annotation = 'intron_NK'
         elif self.test_score_min < -5 and self.test_score_max > 5:
-            self.test_global_annotation = 'intron_I'
+            if self.test_best_k_var.polimyridine_tract >= 0.6:
+                if self.test_best_nk_var.conserved_pairing_score < 8:
+                    self.test_global_annotation = 'intron_K'
+                else:
+                    self.test_global_annotation = 'intron_I'
+            else:
+                self.test_global_annotation = 'intron_I'
         else:
             self.test_global_annotation = 'intron_NN'
 
@@ -594,12 +601,11 @@ class Intron(GenomicSequence):
         if self.polimyridine_tract >= 0.6:
             self.test_score += 3
         self.test_score -= self.conserved_pairing_score
-        if self.test_score > 5:
+
+        if self.canonical_borders:
             self.test_annotation = 'intron_K'
-        elif self.test_score < -5:
+        elif self.conserved_pairing_score > 5:
             self.test_annotation = 'intron_NK'
-        elif self.canonical_borders:
-            self.test_annotation = 'intron_I'
         else:
             self.test_annotation = 'intron_NN'
 
