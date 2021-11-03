@@ -54,7 +54,7 @@ class Gene(GenomicSequence):
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
-        self.exons = [] if exons is None else exons
+        self.exons = [] if exons is None else self.add_exons(exons)
         self.introns = [] if introns is None else introns
         self.name = name
         self.expanded_sequence = ''
@@ -62,12 +62,27 @@ class Gene(GenomicSequence):
         self.expansion_right = 0
         self.introns_dict = {}
 
-    def append_exons(self, exon):
-        self.exons.append(exon)
-    
-    def append_introns(self, intron):
-        self.introns.append(intron)
-    
+    # def append_exons(self, exon):
+    #     self.exons.append(exon)
+
+    # def append_introns(self, intron):
+    #     self.introns.append(intron)
+
+    def add_exons(self, exons_list):
+        if self.strand == '+':
+            exons_list.sort(key=lambda exon: exon.scaffold_start)
+        elif self.strand == '-':
+            exons_list.sort(key=lambda exon: exon.scaffold_start, reverse=True)
+        else:
+            print(self.strand)
+            raise ValueError('gene strand not in {+, -}')
+        prev = None
+        for exon in exons_list:
+            if prev:
+                prev.next_exon = exon
+                exon.prev_exon = prev
+            self.exons.append(exon)
+
     def extract_sequence(self, genome):
         # elif self.strand == '-':
         #     sequence = genome[self.scaffold_name][self.scaffold_end:self.scaffold_start]
@@ -109,12 +124,8 @@ class Gene(GenomicSequence):
     def get_transcript_sequence(self):
         exons_seqs = []
         for exon in self.exons:
-            exons_seqs.append((exon.sequence, exon.scaffold_start))
-        if self.strand == '+':
-            exons_seqs.sort(key=lambda tup: tup[1])
-        elif self.strand == '-':
-            exons_seqs.sort(key=lambda tup: tup[1], reverse=True)
-        sequence = ''.join([exon_seq[0] for exon_seq in exons_seqs])
+            exons_seqs.append(exon.sequence)
+        sequence = ''.join([exon_seq for exon_seq in exons_seqs])
         return sequence
 
     def get_transcript_with_gaps_sequence(self, expanded=False):
@@ -162,10 +173,11 @@ class Gene(GenomicSequence):
                         sequence = self.sequence[- end + self.scaffold_end: - start + self.scaffold_end]
                     intron = Intron(self.scaffold_name, scaffold_start=start, scaffold_end=end, strand=self.strand,
                                     sequence=sequence, gene=self, prev_exon=prev_exon, next_exon=exon)
-                    self.append_introns(intron)
+                    print(self.strand, intron.strand)
+                    self.introns.append(intron)
                     prev_exon.next_intron = intron
-                    exon.prev_intron=intron
-                    prev_exon = exon
+                    exon.prev_intron = intron
+                    # prev_exon = exon
                     # elif self.strand == '-':
                     #     self.append_introns(Intron(self.scaffold_name, end, start))
                     # else:
@@ -173,6 +185,9 @@ class Gene(GenomicSequence):
                 start = exon.scaffold_end
         for intron in self.introns:
             intron.movable_boundary_no_margins()
+            intron.conventional_version()
+            intron.nonconventional_version()
+            intron.add_test_annotation()
         
         # for intron in self.introns:
         #     if self.strand == '-':
