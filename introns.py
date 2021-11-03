@@ -615,6 +615,7 @@ class Intron(GenomicSequence):
             self.test_global_annotation = 'intron_NN'
 
     def set_test_score(self):
+        self.test_score = 0
         self.polimyridine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
         self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
         if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
