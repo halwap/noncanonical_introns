@@ -49,13 +49,14 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, exons=None, introns=None, name=''):
+                 transcript=None, exons=None, name=''):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
-        self.exons = [] if exons is None else self.add_exons(exons)
-        self.introns = [] if introns is None else introns
+        self.working_exons = []
+        self.exons = []
+        self.introns = []
         self.name = name
         self.expanded_sequence = ''
         self.expansion_left = 0
@@ -68,26 +69,27 @@ class Gene(GenomicSequence):
     # def append_introns(self, intron):
     #     self.introns.append(intron)
 
-    def add_exons(self, exons_list):
+    def add_exons(self):
         if self.strand == '+':
-            exons_list.sort(key=lambda exon: exon.scaffold_start)
+            self.working_exons.sort(key=lambda _exon: _exon.scaffold_start)
         elif self.strand == '-':
-            exons_list.sort(key=lambda exon: exon.scaffold_start, reverse=True)
+            self.working_exons.sort(key=lambda _exon: _exon.scaffold_start, reverse=True)
         else:
             print(self.strand)
             raise ValueError('gene strand not in {+, -}')
         prev = None
-        for exon in exons_list:
+        for exon in self.working_exons:
             if prev:
                 prev.next_exon = exon
                 exon.prev_exon = prev
             self.exons.append(exon)
+            prev = exon
 
     def extract_sequence(self, genome):
         # elif self.strand == '-':
         #     sequence = genome[self.scaffold_name][self.scaffold_end:self.scaffold_start]
         # else:
-        #     raise Exception('cojest')
+        #     raise Exception('co jest')
         scaffold_seq = genome[self.scaffold_name]
         sequence = scaffold_seq[self.scaffold_start:self.scaffold_end]
         expanded_sequence, expansion_left, expansion_right = self.get_expanded_sequence(scaffold_seq)
@@ -103,9 +105,11 @@ class Gene(GenomicSequence):
             self.expansion_left = expansion_left
         for exon in self.exons:
             if self.strand == '+':
-                exon.sequence = self.sequence[exon.scaffold_start - self.scaffold_start:exon.scaffold_end - self.scaffold_start]
+                exon.sequence = self.sequence[exon.scaffold_start - self.scaffold_start:
+                                              exon.scaffold_end - self.scaffold_start]
             elif self.strand == '-':
-                exon.sequence = self.sequence[- exon.scaffold_end + self.scaffold_end:- exon.scaffold_start + self.scaffold_end]
+                exon.sequence = self.sequence[- exon.scaffold_end + self.scaffold_end:
+                                              - exon.scaffold_start + self.scaffold_end]
             # else:
                 # print(self.name, exon.scaffold_name, exon.scaffold_start, exon.scaffold_end)
                 # raise Exception('co jest')
@@ -160,20 +164,22 @@ class Gene(GenomicSequence):
         if len(self.exons) < 1:
             raise ValueError('No exons specified.')
             return
-        else:
+        elif len(self.exons) > 1:
             self.introns = []
             start, end = 0, 0
             for exon in self.exons:
                 prev_exon = exon.prev_exon
-                end = exon.scaffold_start
-                if start:
+                if self.strand == '+':
+                    end = exon.scaffold_start
+                elif self.strand == '-':
+                    start = exon.scaffold_end
+                if start and end:
                     if self.strand == '+':
                         sequence = self.sequence[start - self.scaffold_start:end - self.scaffold_start]
                     elif self.strand == '-':
                         sequence = self.sequence[- end + self.scaffold_end: - start + self.scaffold_end]
                     intron = Intron(self.scaffold_name, scaffold_start=start, scaffold_end=end, strand=self.strand,
                                     sequence=sequence, gene=self, prev_exon=prev_exon, next_exon=exon)
-                    print(self.strand, intron.strand)
                     self.introns.append(intron)
                     prev_exon.next_intron = intron
                     exon.prev_intron = intron
@@ -182,12 +188,15 @@ class Gene(GenomicSequence):
                     #     self.append_introns(Intron(self.scaffold_name, end, start))
                     # else:
                     #     raise Exception('co jest')
-                start = exon.scaffold_end
-        for intron in self.introns:
-            intron.movable_boundary_no_margins()
-            intron.conventional_version()
-            intron.nonconventional_version()
-            intron.add_test_annotation()
+                if self.strand == '+':
+                    start = exon.scaffold_end
+                elif self.strand == '-':
+                    end = exon.scaffold_start
+            for intron in self.introns:
+                intron.movable_boundary_no_margins()
+                intron.conventional_version()
+                intron.nonconventional_version()
+                intron.add_test_annotation()
         
         # for intron in self.introns:
         #     if self.strand == '-':
@@ -556,6 +565,7 @@ class Intron(GenomicSequence):
         except Exception as exc:
             print(self.sequence)
             print(self.scaffold_name, self.scaffold_start, self.scaffold_end)
+            print(self.prev_exon, self.next_exon)
             raise exc
 
     def add_manual_annotation(self, man_annotation, start, end):
@@ -627,12 +637,14 @@ class Intron(GenomicSequence):
 
 class Exon(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
+                 gene=None, prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
+        self.gene = gene
         self.prev_exon = prev_exon
         self.next_exon = next_exon
         self.prev_intron = prev_intron
         self.next_intron = next_intron
+
 
 
 class Transcript():
