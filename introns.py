@@ -281,6 +281,8 @@ class Intron(GenomicSequence):
         self.test_score_min = 1000
         self.test_best_k_var = self
         self.test_best_nk_var = self
+        self.test_k = False
+        self.test_nk = False
         self.canonical_borders = False
         self.gc_content = gc_content
         self.polimyridine_tract = polimyridine_tract
@@ -598,21 +600,33 @@ class Intron(GenomicSequence):
             if var.test_score < self.test_score_min:
                 self.test_score_min = var.test_score
                 self.test_best_nk_var = var
-
-        if self.test_score_max > 5 and self.test_score_min >= -5:
-            self.test_global_annotation = 'intron_K'
-        elif self.test_score_min < -5 and self.test_score_max <= 5:
-            self.test_global_annotation = 'intron_NK'
-        elif self.test_score_min < -5 and self.test_score_max > 5:
-            if self.test_best_k_var.polimyridine_tract >= 0.6:
-                if self.test_best_nk_var.conserved_pairing_score < 8:
-                    self.test_global_annotation = 'intron_K'
-                else:
-                    self.test_global_annotation = 'intron_I'
-            else:
+        if self.test_best_nk_var > 5:
+            self.test_nk = True
+        if self.test_best_k_var.canonical_borders:
+            self.test_k = True
+        if self.test_k:
+            if self.test_nk:
                 self.test_global_annotation = 'intron_I'
-        else:
-            self.test_global_annotation = 'intron_NN'
+            else:
+                self.test_global_annotation = 'intron_K'
+        elif self.test_nk:
+            self.test_global_annotation = 'intron_NK'
+
+
+        # if self.test_score_max > 5 and self.test_score_min >= -5:
+        #     self.test_global_annotation = 'intron_K'
+        # elif self.test_score_min < -5 and self.test_score_max <= 5:
+        #     self.test_global_annotation = 'intron_NK'
+        # elif self.test_score_min < -5 and self.test_score_max > 5:
+        #     if self.test_best_k_var.polimyridine_tract >= 0.6:
+        #         if self.test_best_nk_var.conserved_pairing_score < 8:
+        #             self.test_global_annotation = 'intron_K'
+        #         else:
+        #             self.test_global_annotation = 'intron_I'
+        #     else:
+        #         self.test_global_annotation = 'intron_I'
+        # else:
+        #     self.test_global_annotation = 'intron_NN'
 
     def set_test_score(self):
         self.test_score = 0
@@ -627,7 +641,6 @@ class Intron(GenomicSequence):
         if self.polimyridine_tract >= 0.6:
             self.test_score += 3
         self.test_score -= self.conserved_pairing_score
-
         if self.canonical_borders:
             self.test_annotation = 'intron_K'
         elif self.conserved_pairing_score > 5:
