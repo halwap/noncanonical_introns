@@ -600,7 +600,7 @@ class Intron(GenomicSequence):
             if var.test_score < self.test_score_min:
                 self.test_score_min = var.test_score
                 self.test_best_nk_var = var
-        if self.test_best_nk_var.conserbed_pairing_score > 5:
+        if self.test_best_nk_var.conserved_pairing_score > 5:
             self.test_nk = True
         if self.test_best_k_var.canonical_borders:
             self.test_k = True
