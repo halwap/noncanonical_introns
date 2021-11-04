@@ -611,6 +611,8 @@ class Intron(GenomicSequence):
                 self.test_global_annotation = 'intron_K'
         elif self.test_nk:
             self.test_global_annotation = 'intron_NK'
+        else:
+            self.test_global_annotation = 'intron_NN'
 
 
         # if self.test_score_max > 5 and self.test_score_min >= -5:
