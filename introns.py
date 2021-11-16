@@ -684,13 +684,6 @@ def process_file(file_path):
         print("Error opening / processing file")
         raise exc
 
-
-# def read_genome(file_path):
-#     genome = defaultdict(str)
-#     with open(file_path) as f:
-#         for record in SeqIO.parse(f, 'fasta'):
-#             genome[record.id] = str(record.seq)
-#     return genome
 #
 #
 # def read_genes(file_path):
@@ -719,7 +712,7 @@ from re import search
 
 def create(genome, genes, genes_data_type):
     valid_data_type = {'stringtie', 'gmap', 'manual'}
-    if data_type not in valid_data_type:
+    if genes_data_type not in valid_data_type:
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
     genome_eug = read_genome(genome)
     genes_eug = read_genes(genes, genes_data_type)
@@ -730,6 +723,14 @@ def create(genome, genes, genes_data_type):
     return genome_eug, genes_eug
 
 
+def read_genome(file_path):
+    genome = defaultdict(str)
+    with open(file_path) as f:
+        for record in SeqIO.parse(f, 'fasta'):
+#             genome[record.id] = str(record.seq)
+    return genome
+
+
 def read_genes(filename, data_type):
     if data_type == 'stringtie':
         return read_genes_stringtie(filename)
@@ -737,7 +738,6 @@ def read_genes(filename, data_type):
         return read_genes_gmap(filename)
     elif data_type == 'manual':
         return read_genes_manual(filename)
-
 
 
 def read_genes_stringtie(filename):
