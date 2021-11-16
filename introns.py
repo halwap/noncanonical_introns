@@ -781,7 +781,7 @@ def read_genes_gmap(filename):
                 gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
-                gene_name = line[8].strip('";"')
+                gene_name = search('Name=(\w+\.\d);', line[8])
                 gene = genes[gene_name]
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
                 gene.working_exons.append(exon)
