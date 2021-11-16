@@ -685,32 +685,130 @@ def process_file(file_path):
         raise exc
 
 
-def read_genome(file_path):
-    genome = defaultdict(str)
-    with open(file_path) as f:
-        for record in SeqIO.parse(f, 'fasta'):
-            genome[record.id] = str(record.seq)
-    return genome
-    
+# def read_genome(file_path):
+#     genome = defaultdict(str)
+#     with open(file_path) as f:
+#         for record in SeqIO.parse(f, 'fasta'):
+#             genome[record.id] = str(record.seq)
+#     return genome
+#
+#
+# def read_genes(file_path):
+#     genes = {}  # slownik genow
+#     gene, exon = None, None
+#     prev = None
+#     for line in process_file(file_path):
+#         if line[0] == '#':
+#             continue
+#         if line[2] == 'transcript':
+#             if gene:
+#                 genes[gene.name] = gene
+#             gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
+#         elif line[2] == 'exon':
+#             exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
+#             gene.append_exons(exon)
+#             if prev: prev.next_exon = exon
+#             prev = exon
+#     if gene:
+#         genes[gene.name] = gene
+#     return genes
 
-def read_genes(file_path):
+
+from re import search
+
+
+def create(genome, genes, genes_data_type):
+    valid_data_type = {'stringtie', 'gmap', 'manual'}
+    if data_type not in valid_data_type:
+        raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
+    genome_eug = read_genome(genome)
+    genes_eug = read_genes(genes, genes_data_type)
+    for name, gene in list(genes_eug.items()):
+        gene.add_exons()
+        gene.extract_sequence(genome_eug)
+        gene.create_introns()
+    return genome_eug, genes_eug
+
+
+def read_genes(filename, data_type):
+    if data_type == 'stringtie':
+        return read_genes_stringtie(filename)
+    elif data_type == 'gmap':
+        return read_genes_gmap(filename)
+    elif data_type == 'manual':
+        return read_genes_manual(filename)
+
+
+
+def read_genes_stringtie(filename):
     genes = {}  # slownik genow
     gene, exon = None, None
+    exons = []
     prev = None
-    for line in process_file(file_path):
+    for line in process_file(filename):
         if line[0] == '#':
             continue
         if line[2] == 'transcript':
-            if gene:
-                genes[gene.name] = gene
-            gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
+            if line[6] in {"-", "+"}:
+                gene_name = line[11].strip('";"')
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                genes[gene_name] = gene
+            else:
+                gene = None
         elif line[2] == 'exon':
-            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
-            gene.append_exons(exon)
-            if prev: prev.next_exon = exon
-            prev = exon
-    if gene:
-        genes[gene.name] = gene
+            if line[6] in {"-", "+"}:
+                gene_name = line[11].strip('";"')
+                gene = genes[gene_name]
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                gene.working_exons.append(exon)
+    return genes
+
+
+def read_genes_gmap(filename):
+    genes = {}  # slownik genow
+    gene, exon = None, None
+    exons = []
+    prev = None
+    for line in process_file(filename):
+        if line[0] == '#':
+            continue
+        if line[2] == 'gene':
+            if line[6] in {"-", "+"}:
+                gene_name = search('Name=(\w+\.\d);', line[8])
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                genes[gene_name] = gene
+            else:
+                gene = None
+        elif line[2] == 'exon':
+            if line[6] in {"-", "+"}:
+                gene_name = line[8].strip('";"')
+                gene = genes[gene_name]
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                gene.working_exons.append(exon)
+    return genes
+
+
+def read_genes_manual(filename):
+    genes = {}  # slownik genow
+    gene, exon = None, None
+    exons = []
+    prev = None
+    for line in process_file(filename):
+        if len(line) < 3:
+            print(line)
+        if line[0] == '#':
+            continue
+        if line[2] == 'transcript':
+            if line[6] in {"-", "+"}:
+                gene_name = line[8]
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                genes[gene_name] = gene
+            else:
+                gene = None
+        elif line[2] == 'exon':
+            if line[6] in {"-", "+"}:
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                gene.working_exons.append(exon)
     return genes
 
 
