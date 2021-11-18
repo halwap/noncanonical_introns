@@ -645,7 +645,7 @@ class Intron(GenomicSequence):
             #     self.test_score += 10
             # if self.polimyridine_tract >= 0.6:
             #     self.test_score += 3
-            self.test_score -= self.conserved_pairing_score
+            # self.test_score -= self.conserved_pairing_score
             if self.canonical_borders:
                 self.test_annotation = 'intron_K'
             elif self.conserved_pairing_score > 5:
