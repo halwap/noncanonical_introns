@@ -1,6 +1,7 @@
 from Bio import SeqIO
 from collections import defaultdict
 from copy import copy
+from re import search
 
 
 def getter_setter_gen(name, type_):
@@ -707,9 +708,6 @@ def process_file(file_path):
 #     return genes
 
 
-from re import search
-
-
 def create(genome, genes, genes_data_type):
     valid_data_type = {'stringtie', 'gmap', 'manual'}
     if genes_data_type not in valid_data_type:
@@ -742,9 +740,6 @@ def read_genes(filename, data_type):
 
 def read_genes_stringtie(filename):
     genes = {}  # slownik genow
-    gene, exon = None, None
-    exons = []
-    prev = None
     for line in process_file(filename):
         if line[0] == '#':
             continue
@@ -753,8 +748,6 @@ def read_genes_stringtie(filename):
                 gene_name = line[11].strip('";"')
                 gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
-            else:
-                gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
                 gene_name = line[11].strip('";"')
@@ -766,22 +759,21 @@ def read_genes_stringtie(filename):
 
 def read_genes_gmap(filename):
     genes = {}  # slownik genow
-    gene, exon = None, None
-    exons = []
-    prev = None
     for line in process_file(filename):
-        if line[0] == '#':
+        if line[0][0] == '#':
+            continue
+        if len(line) < 3:
+            print(line)
             continue
         if line[2] == 'gene':
             if line[6] in {"-", "+"}:
-                gene_name = search('Name=(\w+\.\d);', line[8])
+                gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
+                print(gene_name)
                 gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
-            else:
-                gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
-                gene_name = search('Name=(\w+\.\d);', line[8])
+                gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
                 gene = genes[gene_name]
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
                 gene.working_exons.append(exon)
@@ -791,8 +783,6 @@ def read_genes_gmap(filename):
 def read_genes_manual(filename):
     genes = {}  # slownik genow
     gene, exon = None, None
-    exons = []
-    prev = None
     for line in process_file(filename):
         if len(line) < 3:
             print(line)
@@ -803,8 +793,6 @@ def read_genes_manual(filename):
                 gene_name = line[8]
                 gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
-            else:
-                gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
