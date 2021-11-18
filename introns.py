@@ -768,7 +768,6 @@ def read_genes_gmap(filename):
         if line[2] == 'gene':
             if line[6] in {"-", "+"}:
                 gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
-                print(gene_name)
                 gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
         elif line[2] == 'exon':
