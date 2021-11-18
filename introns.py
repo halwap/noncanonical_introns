@@ -594,21 +594,18 @@ class Intron(GenomicSequence):
         return calculate_pairing(penta_b, penta_e)
 
     def add_test_annotation(self):
-        self.set_test_score()
-        self.test_score_max = self.test_score
-        self.test_score_min = self.test_score
+        # self.set_test_score()
+        # self.test_score_max = self.test_score
+        # self.test_score_min = self.test_score
         for var in self.variations:
             var.set_test_score()
-            if var.test_score > self.test_score_max:
-                self.test_score_max = var.test_score
-                self.test_best_k_var = var
+            if var.canonical_borders:
+                self.test_k = True
             if var.test_score < self.test_score_min:
                 self.test_score_min = var.test_score
                 self.test_best_nk_var = var
         if self.test_best_nk_var.conserved_pairing_score > 5:
             self.test_nk = True
-        if self.test_best_k_var.canonical_borders:
-            self.test_k = True
         if self.test_k:
             if self.test_nk:
                 self.test_global_annotation = 'intron_I'
@@ -618,7 +615,6 @@ class Intron(GenomicSequence):
             self.test_global_annotation = 'intron_NK'
         else:
             self.test_global_annotation = 'intron_NN'
-
         # if self.test_score_max > 5 and self.test_score_min >= -5:
         #     self.test_global_annotation = 'intron_K'
         # elif self.test_score_min < -5 and self.test_score_max <= 5:
@@ -689,28 +685,6 @@ def process_file(file_path):
     except (IOError, OSError) as exc:
         print("Error opening / processing file")
         raise exc
-
-#
-#
-# def read_genes(file_path):
-#     genes = {}  # slownik genow
-#     gene, exon = None, None
-#     prev = None
-#     for line in process_file(file_path):
-#         if line[0] == '#':
-#             continue
-#         if line[2] == 'transcript':
-#             if gene:
-#                 genes[gene.name] = gene
-#             gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
-#         elif line[2] == 'exon':
-#             exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
-#             gene.append_exons(exon)
-#             if prev: prev.next_exon = exon
-#             prev = exon
-#     if gene:
-#         genes[gene.name] = gene
-#     return genes
 
 
 def create(genome, genes, genes_data_type):
