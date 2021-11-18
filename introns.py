@@ -523,6 +523,10 @@ class Intron(GenomicSequence):
             else: return False
 
         seq = self.sequence
+        if len(seq) < 30:
+            self.is_nonconventional = 0
+            self.best_nonconv_var = 0
+            return
         if self.next_exon and self.next_exon.sequence:
             nex = self.next_exon.sequence[:3]
             nex = nex + ' ' * (3 - len(nex))
