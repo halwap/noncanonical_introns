@@ -615,7 +615,6 @@ class Intron(GenomicSequence):
         else:
             self.test_global_annotation = 'intron_NN'
 
-
         # if self.test_score_max > 5 and self.test_score_min >= -5:
         #     self.test_global_annotation = 'intron_K'
         # elif self.test_score_min < -5 and self.test_score_max <= 5:
@@ -632,24 +631,27 @@ class Intron(GenomicSequence):
         #     self.test_global_annotation = 'intron_NN'
 
     def set_test_score(self):
-        self.test_score = 0
-        self.polimyridine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
-        self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
-        if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
-            self.canonical_borders = True
-        else:
-            self.canonical_borders = False
-        if self.canonical_borders:
-            self.test_score += 10
-        if self.polimyridine_tract >= 0.6:
-            self.test_score += 3
-        self.test_score -= self.conserved_pairing_score
-        if self.canonical_borders:
-            self.test_annotation = 'intron_K'
-        elif self.conserved_pairing_score > 5:
-            self.test_annotation = 'intron_NK'
-        else:
+        if len(self.sequence) < 30:
             self.test_annotation = 'intron_NN'
+        else:
+            # self.test_score = 0
+            # self.polimyridine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
+            self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
+            if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
+                self.canonical_borders = True
+            else:
+                self.canonical_borders = False
+            # if self.canonical_borders:
+            #     self.test_score += 10
+            # if self.polimyridine_tract >= 0.6:
+            #     self.test_score += 3
+            self.test_score -= self.conserved_pairing_score
+            if self.canonical_borders:
+                self.test_annotation = 'intron_K'
+            elif self.conserved_pairing_score > 5:
+                self.test_annotation = 'intron_NK'
+            else:
+                self.test_annotation = 'intron_NN'
 
 
 class Exon(GenomicSequence):
@@ -661,7 +663,6 @@ class Exon(GenomicSequence):
         self.next_exon = next_exon
         self.prev_intron = prev_intron
         self.next_intron = next_intron
-
 
 
 class Transcript():
