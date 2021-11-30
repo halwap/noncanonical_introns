@@ -739,22 +739,26 @@ def read_genes_stringtie(filename):
 def read_genes_gmap(filename):
     genes = {}  # slownik genow
     for line in process_file(filename):
-        if line[0][0] == '#':
-            continue
-        if len(line) < 3:
+        try:
+            if line[0][0] == '#':
+                continue
+            if len(line) < 3:
+                print(line)
+                continue
+            if line[2] == 'gene':
+                if line[6] in {"-", "+"}:
+                    gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
+                    gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                    genes[gene_name] = gene
+            elif line[2] == 'exon':
+                if line[6] in {"-", "+"}:
+                    gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
+                    gene = genes[gene_name]
+                    exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                    gene.working_exons.append(exon)
+        except AttributeError as exc:
             print(line)
-            continue
-        if line[2] == 'gene':
-            if line[6] in {"-", "+"}:
-                gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
-                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
-                genes[gene_name] = gene
-        elif line[2] == 'exon':
-            if line[6] in {"-", "+"}:
-                gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
-                gene = genes[gene_name]
-                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
-                gene.working_exons.append(exon)
+            raise exc
     return genes
 
 
