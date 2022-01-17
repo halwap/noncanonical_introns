@@ -50,7 +50,7 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, exons=None, name=''):
+                 transcript=None, exons=None, name='', coverage=0):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
@@ -63,6 +63,7 @@ class Gene(GenomicSequence):
         self.expansion_left = 0
         self.expansion_right = 0
         self.introns_dict = {}
+        self.coverage = coverage
 
     # def append_exons(self, exon):
     #     self.exons.append(exon)
@@ -725,7 +726,8 @@ def read_genes_stringtie(filename):
         if line[2] == 'transcript':
             if line[6] in {"-", "+"}:
                 gene_name = line[11].strip('";"')
-                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                coverage = line[13].strip('";"')
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[], coverage=coverage)
                 genes[gene_name] = gene
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
