@@ -1,6 +1,7 @@
 from Bio import SeqIO
 from collections import defaultdict
 from copy import copy
+from re import search
 
 
 def getter_setter_gen(name, type_):
@@ -49,7 +50,7 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, exons=None, name=''):
+                 transcript=None, exons=None, name='', coverage=0):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
@@ -62,6 +63,7 @@ class Gene(GenomicSequence):
         self.expansion_left = 0
         self.expansion_right = 0
         self.introns_dict = {}
+        self.coverage = coverage
 
     # def append_exons(self, exon):
     #     self.exons.append(exon)
@@ -231,7 +233,8 @@ class Intron(GenomicSequence):
     :param sequence: (str) Optional, genomic sequence of the intron.
     :param is_conventional: (int) Optional, number of the conventional class the intron belongs to; if isn't conventional then 0.
     :param is_nonconventional: (int) Optional, number of the nonconventional class the intron belongs to; if isn't nonconventional then 0.
-    :param best_conv_var: (int) Optional, unique to main intron, absent in variations; number of the best conventional class out of all variations.
+    :param best_conv_var: (int) Optional, unique to main intron, absent in var
+    iations; number of the best conventional class out of all variations.
     :param best_nonconv_var: (int) Optional, unique to main intron, absent in variations; number of the best nonconventional class out of all variations.
     """
     scaffold_name = str
@@ -257,7 +260,7 @@ class Intron(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
                  margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
                  prev_exon=None, next_exon=None, man_annotation='', test_annotation='', test_global_annotation='',
-                 test_score=0, gc_content=0.0, polimyridine_tract=0.0):
+                 test_score=0, gc_content=0.0, polypyrimidine_tract=0.0):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -285,7 +288,7 @@ class Intron(GenomicSequence):
         self.test_nk = False
         self.canonical_borders = False
         self.gc_content = gc_content
-        self.polimyridine_tract = polimyridine_tract
+        self.polypyrimidine_tract = polypyrimidine_tract
         self.conserved_pairing_score = 0
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
         if self.strand == '-':
@@ -522,6 +525,10 @@ class Intron(GenomicSequence):
             else: return False
 
         seq = self.sequence
+        if len(seq) < 30:
+            self.is_nonconventional = 0
+            self.best_nonconv_var = 0
+            return
         if self.next_exon and self.next_exon.sequence:
             nex = self.next_exon.sequence[:3]
             nex = nex + ' ' * (3 - len(nex))
@@ -589,21 +596,18 @@ class Intron(GenomicSequence):
         return calculate_pairing(penta_b, penta_e)
 
     def add_test_annotation(self):
-        self.set_test_score()
-        self.test_score_max = self.test_score
-        self.test_score_min = self.test_score
+        # self.set_test_score()
+        # self.test_score_max = self.test_score
+        # self.test_score_min = self.test_score
         for var in self.variations:
             var.set_test_score()
-            if var.test_score > self.test_score_max:
-                self.test_score_max = var.test_score
-                self.test_best_k_var = var
+            if var.canonical_borders:
+                self.test_k = True
             if var.test_score < self.test_score_min:
                 self.test_score_min = var.test_score
                 self.test_best_nk_var = var
         if self.test_best_nk_var.conserved_pairing_score > 5:
             self.test_nk = True
-        if self.test_best_k_var.canonical_borders:
-            self.test_k = True
         if self.test_k:
             if self.test_nk:
                 self.test_global_annotation = 'intron_I'
@@ -613,14 +617,12 @@ class Intron(GenomicSequence):
             self.test_global_annotation = 'intron_NK'
         else:
             self.test_global_annotation = 'intron_NN'
-
-
         # if self.test_score_max > 5 and self.test_score_min >= -5:
         #     self.test_global_annotation = 'intron_K'
         # elif self.test_score_min < -5 and self.test_score_max <= 5:
         #     self.test_global_annotation = 'intron_NK'
         # elif self.test_score_min < -5 and self.test_score_max > 5:
-        #     if self.test_best_k_var.polimyridine_tract >= 0.6:
+        #     if self.test_best_k_var.polypyrimidine_tract >= 0.6:
         #         if self.test_best_nk_var.conserved_pairing_score < 8:
         #             self.test_global_annotation = 'intron_K'
         #         else:
@@ -631,24 +633,27 @@ class Intron(GenomicSequence):
         #     self.test_global_annotation = 'intron_NN'
 
     def set_test_score(self):
-        self.test_score = 0
-        self.polimyridine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
-        self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
-        if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
-            self.canonical_borders = True
-        else:
-            self.canonical_borders = False
-        if self.canonical_borders:
-            self.test_score += 10
-        if self.polimyridine_tract >= 0.6:
-            self.test_score += 3
-        self.test_score -= self.conserved_pairing_score
-        if self.canonical_borders:
-            self.test_annotation = 'intron_K'
-        elif self.conserved_pairing_score > 5:
-            self.test_annotation = 'intron_NK'
-        else:
+        if len(self.sequence) < 30:
             self.test_annotation = 'intron_NN'
+        else:
+            # self.test_score = 0
+            # self.polypyrimidine_tract = calculate_pyrimidine_content(self.sequence[-12:-2])
+            self.conserved_pairing_score = calculate_pairing(self.sequence[3:13], self.sequence[-15:-5])
+            if self.sequence[:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
+                self.canonical_borders = True
+            else:
+                self.canonical_borders = False
+            # if self.canonical_borders:
+            #     self.test_score += 10
+            # if self.polypyrimidine_tract >= 0.6:
+            #     self.test_score += 3
+            # self.test_score -= self.conserved_pairing_score
+            if self.canonical_borders:
+                self.test_annotation = 'intron_K'
+            elif self.conserved_pairing_score > 5:
+                self.test_annotation = 'intron_NK'
+            else:
+                self.test_annotation = 'intron_NN'
 
 
 class Exon(GenomicSequence):
@@ -660,7 +665,6 @@ class Exon(GenomicSequence):
         self.next_exon = next_exon
         self.prev_intron = prev_intron
         self.next_intron = next_intron
-
 
 
 class Transcript():
@@ -685,32 +689,99 @@ def process_file(file_path):
         raise exc
 
 
+def create(genome, genes, genes_data_type):
+    valid_data_type = {'stringtie', 'gmap', 'manual'}
+    if genes_data_type not in valid_data_type:
+        raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
+    genome_eug = read_genome(genome)
+    genes_eug = read_genes(genes, genes_data_type)
+    for name, gene in list(genes_eug.items()):
+        gene.add_exons()
+        gene.extract_sequence(genome_eug)
+        gene.create_introns()
+    return genome_eug, genes_eug
+
+
 def read_genome(file_path):
     genome = defaultdict(str)
     with open(file_path) as f:
         for record in SeqIO.parse(f, 'fasta'):
             genome[record.id] = str(record.seq)
     return genome
-    
 
-def read_genes(file_path):
+
+def read_genes(filename, data_type):
+    if data_type == 'stringtie':
+        return read_genes_stringtie(filename)
+    elif data_type == 'gmap':
+        return read_genes_gmap(filename)
+    elif data_type == 'manual':
+        return read_genes_manual(filename)
+
+
+def read_genes_stringtie(filename):
     genes = {}  # slownik genow
-    gene, exon = None, None
-    prev = None
-    for line in process_file(file_path):
+    for line in process_file(filename):
         if line[0] == '#':
             continue
         if line[2] == 'transcript':
-            if gene:
-                genes[gene.name] = gene
-            gene = Gene(line[0], line[3] - 1, line[4], name=line[11].strip('";'), strand=line[6], exons=[])
+            if line[6] in {"-", "+"}:
+                gene_name = line[11].strip('";"')
+                coverage = line[13].strip('";"')
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[], coverage=coverage)
+                genes[gene_name] = gene
         elif line[2] == 'exon':
-            exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], prev_exon=4)
-            gene.append_exons(exon)
-            if prev: prev.next_exon = exon
-            prev = exon
-    if gene:
-        genes[gene.name] = gene
+            if line[6] in {"-", "+"}:
+                gene_name = line[11].strip('";"')
+                gene = genes[gene_name]
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                gene.working_exons.append(exon)
+    return genes
+
+
+def read_genes_gmap(filename):
+    genes = {}  # slownik genow
+    for line in process_file(filename):
+        try:
+            if line[0][0] == '#':
+                continue
+            if len(line) < 3:
+                print(line)
+                continue
+            if line[2] == 'gene':
+                if line[6] in {"-", "+"}:
+                    gene_name = search('Name=(\w+\.\d)', line[8]).groups()[0]
+                    gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                    genes[gene_name] = gene
+            elif line[2] == 'exon':
+                if line[6] in {"-", "+"}:
+                    gene_name = search('Name=(\w+\.\d);', line[8]).groups()[0]
+                    gene = genes[gene_name]
+                    exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                    gene.working_exons.append(exon)
+        except AttributeError as exc:
+            print(line)
+            raise exc
+    return genes
+
+
+def read_genes_manual(filename):
+    genes = {}  # slownik genow
+    gene, exon = None, None
+    for line in process_file(filename):
+        if len(line) < 3:
+            print(line)
+        if line[0] == '#':
+            continue
+        if line[2] == 'transcript':
+            if line[6] in {"-", "+"}:
+                gene_name = line[8]
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
+                genes[gene_name] = gene
+        elif line[2] == 'exon':
+            if line[6] in {"-", "+"}:
+                exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
+                gene.working_exons.append(exon)
     return genes
 
 
