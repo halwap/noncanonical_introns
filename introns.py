@@ -309,6 +309,9 @@ class Intron(GenomicSequence):
         i = 1
         # start checking for repeats left from the junction
         check = 'left'
+        print(self)
+        print(' '.join([self.prev_exon.sequence[-5:], self.sequence[:5],
+                        self.sequence[-5:], self.next_exon.sequence[:5]]))
         while True:
             new_prev_exon = copy(self.prev_exon)
             new_next_exon = copy(self.next_exon)
@@ -317,7 +320,7 @@ class Intron(GenomicSequence):
                         or i > len(self.sequence)\
                         or left_margin_sequence[-i] != self.sequence[-i]:
                     check = 'right'
-                    i = 0
+                    i = 1
                     continue
                 new_seq = left_margin_sequence[-i:] + self.sequence[:-i]
                 new_prev_exon.sequence = new_prev_exon.sequence[:-i]
@@ -328,10 +331,13 @@ class Intron(GenomicSequence):
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i,
                                        scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
+                print(check, i, new_variation)
+                print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                                new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
             else:  # checking to the right
-                if i + 1 > len(right_margin_sequence)\
-                        or i + 1 > len(self.sequence)\
-                        or self.sequence[i] != right_margin_sequence[i]:
+                if i > len(right_margin_sequence)\
+                        or i > len(self.sequence)\
+                        or self.sequence[i - 1] != right_margin_sequence[i - 1]:
                     break
                 new_seq = self.sequence[i:] + right_margin_sequence[:i]
                 new_prev_exon.sequence = new_prev_exon.sequence + self.sequence[:i]
@@ -342,7 +348,10 @@ class Intron(GenomicSequence):
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i,
                                        scaffold_end=self.scaffold_end + i, gene=self.gene, sequence=new_seq,
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
-            # TODO zadbac ladniej o to zeby sie krotkie egzony nie robily
+                print(check, i, new_variation)
+                print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                                new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
+                # TODO zadbac ladniej o to zeby sie krotkie egzony nie robily
             if not len(new_variation.prev_exon.sequence) < 1 or len(new_variation.next_exon.sequence) < 1:
                 self.variations.append(new_variation)
             i += 1
