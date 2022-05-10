@@ -55,13 +55,13 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, name='', coverage=0):
+                 transcript=None, name='', coverage=0, exons=[]):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
         self.working_exons = []
-        self.exons = []
+        self.exons = exons
         self.introns = []
         self.name = name
         self.expanded_sequence = ''
@@ -159,10 +159,14 @@ class Gene(GenomicSequence):
         introns_to_assess, their_characteristics = [], []
         for intron in self.introns:
             introns_to_assess.append(intron)
-            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:], intron.sequence, intron.next_exon.sequence[:10]))
+            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:] +
+                                                                        intron.sequence +
+                                                                        intron.next_exon.sequence[:10]))
             for var in intron.variations:
                 introns_to_assess.append(var)
-                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:], var.sequence, var.next_exon.sequence[:10]))
+                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:] +
+                                                                            var.sequence +
+                                                                            var.next_exon.sequence[:10]))
         if len(their_characteristics) == 0:
             return
         predictions = loaded_model.predict(their_characteristics)
@@ -762,7 +766,9 @@ def calculate_pyrimidine_content(seq):
     return count/len(seq)
 
 
-def compute_intron_characteristics(prev_exon_seq, intron_seq, next_exon_seq):
+def compute_intron_characteristics(seq):#prev_exon_seq, intron_seq, next_exon_seq):
+    if type(seq)==Intron: seq = seq.sequence
+    prev_exon_seq, intron_seq, next_exon_seq = seq[:5], seq[5:-5], seq[-5:]
     baseY = {'C', 'T'}
     baseR = {'A', 'G'}
 
@@ -797,12 +803,14 @@ def predict_all_introns(genes):
     for name, gene in list(genes.items()):
         for intron in gene.introns:
             introns_to_assess.append(intron)
-            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:],
-                                                                        intron.sequence, intron.next_exon.sequence[:10]))
+            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:] + 
+                                                                        intron.sequence +
+                                                                        intron.next_exon.sequence[:10]))
             for var in intron.variations:
                 introns_to_assess.append(var)
-                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:],
-                                                                            var.sequence, var.next_exon.sequence[:10]))
+                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:] +
+                                                                            var.sequence +
+                                                                            var.next_exon.sequence[:10]))
     print(len(introns_to_assess), len(their_characteristics))
     assert len(their_characteristics) > 0
     predictions = loaded_model.predict(their_characteristics)
