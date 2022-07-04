@@ -56,7 +56,7 @@ class Gene(GenomicSequence):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
         self.working_exons = []
-        self.exons = []
+        self.exons = [] if exons==None else exons
         self.introns = []
         self.name = name
         self.expanded_sequence = ''
@@ -170,6 +170,9 @@ class Gene(GenomicSequence):
             self.introns = []
             start, end = 0, 0
             for exon in self.exons:
+                if not exon.prev_intron and not exon.next_intron:
+                    print('The exon has no introns')
+                    return
                 prev_exon = exon.prev_exon
                 if self.strand == '+':
                     end = exon.scaffold_start
@@ -183,7 +186,10 @@ class Gene(GenomicSequence):
                     intron = Intron(self.scaffold_name, scaffold_start=start, scaffold_end=end, strand=self.strand,
                                     sequence=sequence, gene=self, prev_exon=prev_exon, next_exon=exon)
                     self.introns.append(intron)
-                    prev_exon.next_intron = intron
+                    if prev_exon and prev_exon.next_intron:
+                        prev_exon.next_intron = intron
+                    else:
+                        prev_exon.next_intron = None
                     exon.prev_intron = intron
                     # prev_exon = exon
                     # elif self.strand == '-':
@@ -717,6 +723,8 @@ def read_genes(filename, data_type):
         return read_genes_gmap(filename)
     elif data_type == 'manual':
         return read_genes_manual(filename)
+    else:
+        print("No datatype specified")
 
 
 def read_genes_stringtie(filename):
