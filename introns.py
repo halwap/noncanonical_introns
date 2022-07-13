@@ -644,6 +644,7 @@ def create(genome_path, genes_gff_path, genes_data_type):
         gene.add_exons()
         gene.extract_sequence(genome)
         gene.create_introns()
+    #predict_all_introns(genes)
     return genome, genes
 
 
@@ -713,6 +714,8 @@ def read_genes_gmap(filename):
 def read_genes_manual(filename):
     genes = {}  # slownik genow
     gene, exon = None, None
+    exons = []
+    prev = None
     for line in process_file(filename):
         if len(line) < 3:
             print(line)
@@ -721,13 +724,16 @@ def read_genes_manual(filename):
         if line[2] == 'transcript':
             if line[6] in {"-", "+"}:
                 gene_name = line[8]
-                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6])
+                gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
+            else:
+                gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
                 gene.working_exons.append(exon)
     return genes
+
 
 
 def complement(seq):
