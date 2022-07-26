@@ -6,7 +6,8 @@ import pickle
 import numpy as np
 
 
-loaded_model = pickle.load(open('finalized_model.sav', 'rb'))
+#loaded_model = pickle.load(open('finalized_model.sav', 'rb'))
+loaded_model = pickle.load(open('13_07_binary_model.sav', 'rb'))
 
 
 def getter_setter_gen(name, type_):
@@ -159,18 +160,15 @@ class Gene(GenomicSequence):
         introns_to_assess, their_characteristics = [], []
         for intron in self.introns:
             introns_to_assess.append(intron)
-            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:] +
-                                                                        intron.sequence +
-                                                                        intron.next_exon.sequence[:10]))
+            their_characteristics.append(compute_intron_characteristics(intron))
             for var in intron.variations:
                 introns_to_assess.append(var)
-                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:] +
-                                                                            var.sequence +
-                                                                            var.next_exon.sequence[:10]))
+                their_characteristics.append(compute_intron_characteristics(var))
         if len(their_characteristics) == 0:
             return
         predictions = loaded_model.predict(their_characteristics)
-        probas = loaded_model.predict_proba(their_characteristics)[:, 1]
+        #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
+        probas = loaded_model.decision_function(their_characteristics)
         for i, pred, prob in zip(introns_to_assess, predictions, probas):
             if pred == 1:
                 i.ML_is_nonconventional = True
@@ -519,8 +517,7 @@ class Intron(GenomicSequence):
     def calculate_ML_characteristic(self):
         if not self.prev_exon or not self.next_exon:
             return
-        self.ML_characteristic = compute_intron_characteristics(self.prev_exon.sequence[-10:], self.sequence,
-                                                                self.next_exon.sequence[:10]).reshape(1, -1)
+        self.ML_characteristic = compute_intron_characteristics(self).reshape(1, -1)
 
     def add_manual_annotation(self, man_annotation, start, end):
         self.man_annotation = man_annotation
@@ -809,18 +806,15 @@ def predict_all_introns(genes):
     for name, gene in list(genes.items()):
         for intron in gene.introns:
             introns_to_assess.append(intron)
-            their_characteristics.append(compute_intron_characteristics(intron.prev_exon.sequence[-10:] + 
-                                                                        intron.sequence +
-                                                                        intron.next_exon.sequence[:10]))
+            their_characteristics.append(compute_intron_characteristics(intron))
             for var in intron.variations:
                 introns_to_assess.append(var)
-                their_characteristics.append(compute_intron_characteristics(var.prev_exon.sequence[-10:] +
-                                                                            var.sequence +
-                                                                            var.next_exon.sequence[:10]))
+                their_characteristics.append(compute_intron_characteristics(var))
     print(len(introns_to_assess), len(their_characteristics))
     assert len(their_characteristics) > 0
     predictions = loaded_model.predict(their_characteristics)
-    probas = loaded_model.predict_proba(their_characteristics)[:,1]
+    #probas = loaded_model.predict_proba(their_characteristics)[:,1]
+    probas = loaded_model.decision_function(their_characteristics)
     for i, pred, prob in zip(introns_to_assess, predictions, probas):
         if pred == 1:  i.ML_is_nonconventional = True
         i.ML_nonconv_proba = prob
