@@ -311,9 +311,9 @@ class Intron(GenomicSequence):
         i = 1
         # start checking for repeats left from the junction
         check = 'left'
-        print(self)
-        print(' '.join([self.prev_exon.sequence[-5:], self.sequence[:5],
-                        self.sequence[-5:], self.next_exon.sequence[:5]]))
+        # print(self)
+        # print(' '.join([self.prev_exon.sequence[-5:], self.sequence[:5],
+        #                 self.sequence[-5:], self.next_exon.sequence[:5]]))
         while True:
             new_prev_exon = copy(self.prev_exon)
             new_next_exon = copy(self.next_exon)
@@ -333,9 +333,9 @@ class Intron(GenomicSequence):
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i,
                                        scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
-                print(check, i, new_variation)
-                print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
-                                new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
+                # print(check, i, new_variation)
+                # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
             else:  # checking to the right
                 if i > len(right_margin_sequence)\
                         or i > len(self.sequence)\
@@ -350,9 +350,9 @@ class Intron(GenomicSequence):
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i,
                                        scaffold_end=self.scaffold_end + i, gene=self.gene, sequence=new_seq,
                                        prev_exon=new_prev_exon, next_exon=new_next_exon)
-                print(check, i, new_variation)
-                print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
-                                new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
+                # print(check, i, new_variation)
+                # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
                 # TODO zadbac ladniej o to zeby sie krotkie egzony nie robily
             if not len(new_variation.prev_exon.sequence) < 1 or len(new_variation.next_exon.sequence) < 1:
                 self.variations.append(new_variation)
