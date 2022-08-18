@@ -770,8 +770,10 @@ def calculate_pyrimidine_content(seq):
 
 
 def compute_intron_characteristics(seq):#prev_exon_seq, intron_seq, next_exon_seq):
-    if type(seq)==Intron: seq = seq.sequence
-    prev_exon_seq, intron_seq, next_exon_seq = seq[:5], seq[5:-5], seq[-5:]
+    if type(seq)==Intron:
+        prev_exon_seq = seq.prev_exon.sequence[-5:]
+        intron_seq = seq.sequence
+        next_exon_seq = seq.next_exon.sequence[:5]
     baseY = {'C', 'T'}
     baseR = {'A', 'G'}
 
