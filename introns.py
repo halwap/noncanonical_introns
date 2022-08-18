@@ -7,7 +7,7 @@ import numpy as np
 
 
 #loaded_model = pickle.load(open('finalized_model.sav', 'rb'))
-loaded_model = pickle.load(open('13_07_binary_model.sav', 'rb'))
+loaded_model = pickle.load(open('13_08_binary_model_NK_vs_var.sav', 'rb'))
 
 
 def getter_setter_gen(name, type_):
