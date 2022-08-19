@@ -166,17 +166,20 @@ class Gene(GenomicSequence):
                 their_characteristics.append(compute_intron_characteristics(var))
         if len(their_characteristics) == 0:
             return
-        predictions = loaded_model.predict(their_characteristics)
+        conv_predictions = conventional_model.predict(their_characteristics)
         #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
-        probas = loaded_model.decision_function(their_characteristics)
-        for i, pred, prob in zip(introns_to_assess, predictions, probas):
-            if pred == 1:
-                i.ML_is_nonconventional = True
-            i.ML_nonconv_proba = prob
+        conv_scores = conventional_model.decision_function(their_characteristics)
+        nonconv_predictions = nonconventional_model.predict(their_characteristics)
+        nonconv_scores = nonconventional_model.predict(their_characteristics)
+        for i, c_pred, c_score, nc_pred, nc_score in \
+                zip(introns_to_assess, conv_predictions, conv_scores, nonconv_predictions, nonconv_scores):
+            i.ML_class = [c_pred, nc_pred]
+            i.ML_conv_score = c_score
+            i.ML_nonconv_score = nc_score
         for intron in self.introns:
             var_probas = [v.ML_nonconv_proba for v in intron.variations]
-            intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
-            intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
+            # intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
+            # intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
         return
 
     def create_introns(self):
