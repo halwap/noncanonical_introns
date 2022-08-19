@@ -176,8 +176,8 @@ class Gene(GenomicSequence):
             i.ML_class = [c_pred, nc_pred]
             i.ML_conv_score = c_score
             i.ML_nonconv_score = nc_score
-        for intron in self.introns:
-            var_probas = [v.ML_nonconv_proba for v in intron.variations]
+        # for intron in self.introns:
+        #     var_probas = [v.ML_nonconv_proba for v in intron.variations]
             # intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
             # intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
         return
