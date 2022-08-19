@@ -6,8 +6,8 @@ import pickle
 import numpy as np
 
 
-#loaded_model = pickle.load(open('finalized_model.sav', 'rb'))
-loaded_model = pickle.load(open('13_08_binary_model_NK_vs_var.sav', 'rb'))
+conventional_model = pickle.load(open('finalized_model.sav', 'rb'))
+nonconventional_model = pickle.load(open('18_08_binary_model_NK_vs_var.sav', 'rb'))
 
 
 def getter_setter_gen(name, type_):
@@ -230,11 +230,14 @@ class Intron(GenomicSequence):
     :param margin_left_seq: (str) Optional, end sequence from the preceding exon.
     :param margin_right_seq: (str) Optional, beginning sequence of the following exon.
     :param sequence: (str) Optional, genomic sequence of the intron.
-    :param is_conventional: (int) Optional, number of the conventional class the intron belongs to; if isn't conventional then 0.
-    :param is_nonconventional: (int) Optional, number of the nonconventional class the intron belongs to; if isn't nonconventional then 0.
+    :param is_conventional: (int) Optional, number of the conventional class the intron belongs to;
+    if isn't conventional then 0.
+    :param is_nonconventional: (int) Optional, number of the nonconventional class the intron belongs to;
+    if isn't nonconventional then 0.
     :param best_conv_var: (int) Optional, unique to main intron, absent in var
     iations; number of the best conventional class out of all variations.
-    :param best_nonconv_var: (int) Optional, unique to main intron, absent in variations; number of the best nonconventional class out of all variations.
+    :param best_nonconv_var: (int) Optional, unique to main intron, absent in variations;
+    number of the best nonconventional class out of all variations.
     """
     scaffold_name = str
     scaffold_start = int
@@ -289,16 +292,20 @@ class Intron(GenomicSequence):
         self.polypyrimidine_tract = polypyrimidine_tract
         self.conserved_pairing_score = 0
         self.ML_characteristic = np.zeros(8)
+        self.ML_class = None
         self.ML_is_nonconventional = False
         self.ML_best_conv_version = None
         self.ML_best_nonconv_version = None
-        self.ML_nonconv_proba = 0
+        self.ML_conv_score = 0
+        self.ML_nonconv_score = 0
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji
         #      - warianty ich nie maja i zawsze maja nie miec
         if self.strand == '-':
-            self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end, -self.scaffold_start + self.gene.scaffold_end
+            self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end,\
+                                             -self.scaffold_start + self.gene.scaffold_end
         elif self.strand == '+':
-            self.gene_start, self.gene_end = self.scaffold_start - self.gene.scaffold_start, self.scaffold_end - self.gene.scaffold_start
+            self.gene_start, self.gene_end = self.scaffold_start - self.gene.scaffold_start,\
+                                             self.scaffold_end - self.gene.scaffold_start
 
     def movable_boundary_no_margins(self):
         """
@@ -488,31 +495,37 @@ class Intron(GenomicSequence):
             print(self.prev_exon, self.next_exon)
             raise exc
 
-    def check_ML_nonconv(self):
+    def check_ML(self):
         if not self.ML_characteristic:
             self.calculate_ML_characteristic()
-        characteristic = self.ML_characteristic
-        result = loaded_model.predict(characteristic)[0]
-        proba = loaded_model.predict_proba(characteristic)[0][1]
+        result_K = conventional_model.predict(self.ML_characteristic)[0]
+        score_K = conventional_model.predict_proba(self.ML_characteristic)[0][1]
+        result_NK = nonconventional_model.predict(self.ML_characteristic)[0]
+        score_NK = nonconventional_model.predict_proba(self.ML_characteristic)[0][1]
 
-        if result == 1:  self.ML_is_nonconventional = True
-        self.ML_nonconv_proba = proba
-        self.ML_best_conv_version = self
-        self.ML_best_nonconv_version = self
-
+        self.ML_class = [result_K, result_NK]
+        self.ML_conv_score = score_K
+        self.ML_nonconv_score = score_NK
+        # if result_K == 1:
+        #     self.ML_is_nonconventional = True
+        # self.ML_nonconv_proba = proba
+        # self.ML_best_conv_version = self
+        # self.ML_best_nonconv_version = self
         for var in self.variations:
-            c, p = var.check_ML_nonconv()
-            if p > self.ML_best_nonconv_version.ML_nonconv_proba:
-                self.ML_best_nonconv_version = var
-            if p < self.ML_best_conv_version.ML_nonconv_proba:
-                self.ML_best_conv_version = var
+            var.check_ML()
+        # for var in self.variations:
+        #     c, p = var.check_ML()
+        #     if p > self.ML_best_nonconv_version.ML_nonconv_proba:
+        #         self.ML_best_nonconv_version = var
+        #     if p < self.ML_best_conv_version.ML_nonconv_proba:
+        #         self.ML_best_conv_version = var
         # if var_probas:
         #    if np.max(var_probas) > self.
         #    best_conv_v_ind, best_nonconv_v_ind = np.argmin(var_probas), np.argmax(var_probas)
         #    print(len(var_probas), (best_conv_v_ind, best_nonconv_v_ind))
         #    self.ML_best_conv_version = self.variations[best_conv_v_ind]
         #    self.ML_best_nonconv_version = self.variations[best_nonconv_v_ind]
-        return result, proba
+        # return result, proba
 
     def calculate_ML_characteristic(self):
         if not self.prev_exon or not self.next_exon:
