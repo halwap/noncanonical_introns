@@ -170,7 +170,7 @@ class Gene(GenomicSequence):
         #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
         conv_scores = conventional_model.predict_proba(their_characteristics)
         nonconv_predictions = nonconventional_model.predict(their_characteristics)
-        nonconv_scores = nonconventional_model.predict_proba(their_characteristics)
+        nonconv_scores = nonconventional_model.decision_function(their_characteristics)
         for i, c_pred, c_score, nc_pred, nc_score in \
                 zip(introns_to_assess, conv_predictions, conv_scores, nonconv_predictions, nonconv_scores):
             i.ML_class = [c_pred, nc_pred]
