@@ -168,7 +168,7 @@ class Gene(GenomicSequence):
             return
         conv_predictions = conventional_model.predict(their_characteristics)
         #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
-        conv_scores = conventional_model.predict_proba(their_characteristics)
+        conv_scores = conventional_model.predict_proba(their_characteristics)[:, 1]
         nonconv_predictions = nonconventional_model.predict(their_characteristics)
         nonconv_scores = nonconventional_model.decision_function(their_characteristics)
         for i, c_pred, c_score, nc_pred, nc_score in \
