@@ -150,9 +150,7 @@ class Gene(GenomicSequence):
                     assert intron_length > -1
                     to_be_joined.append((''.join(['-' for i in range(intron_length)])))
                 to_be_joined.append(exon.sequence)
-                end = exon.scaffold_start        raise Exception
-
-
+                end = exon.scaffold_start
         sequence = ''.join(to_be_joined)
         if expanded:
             sequence = self.expansion_left * '-' + sequence + self.expansion_right * '-'
