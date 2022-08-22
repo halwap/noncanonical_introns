@@ -150,7 +150,9 @@ class Gene(GenomicSequence):
                     assert intron_length > -1
                     to_be_joined.append((''.join(['-' for i in range(intron_length)])))
                 to_be_joined.append(exon.sequence)
-                end = exon.scaffold_start
+                end = exon.scaffold_start        raise Exception
+
+
         sequence = ''.join(to_be_joined)
         if expanded:
             sequence = self.expansion_left * '-' + sequence + self.expansion_right * '-'
@@ -264,7 +266,7 @@ class Intron(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
                  margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
                  prev_exon=None, next_exon=None, man_annotation='', test_annotation='', test_global_annotation='',
-                 test_score=0, gc_content=0.0, polypyrimidine_tract=0.0):
+                 mother_of_intron=None, test_score=0, gc_content=0.0, polypyrimidine_tract=0.0):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -273,6 +275,7 @@ class Intron(GenomicSequence):
         self.margin_left_seq = margin_left_seq
         self.margin_right_seq = margin_right_seq
         self.variations = []
+        self.mother_of_intron = mother_of_intron
         self.is_conventional = 0
         self.is_nonconventional = 0
         self.prev_exon = prev_exon
@@ -342,7 +345,7 @@ class Intron(GenomicSequence):
                 # creating new variation moved to the left
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i,
                                        scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
-                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon, mother_of_intron=self)
                 # print(check, i, new_variation)
                 # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
                 #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
@@ -359,12 +362,12 @@ class Intron(GenomicSequence):
                 # creating new variation moved to the right
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i,
                                        scaffold_end=self.scaffold_end + i, gene=self.gene, sequence=new_seq,
-                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon, mother_of_intron=self)
                 # print(check, i, new_variation)
                 # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
                 #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
                 # TODO zadbac ladniej o to zeby sie krotkie egzony nie robily
-            if not len(new_variation.prev_exon.sequence) < 1 or len(new_variation.next_exon.sequence) < 1:
+            if not len(new_variation.prev_exon.sequence) < 1 and not len(new_variation.next_exon.sequence) < 1:
                 self.variations.append(new_variation)
             i += 1
         self.gene.introns_dict[(self.scaffold_start, self.scaffold_end)] = self
