@@ -71,7 +71,7 @@ class Gene(GenomicSequence):
         self.introns_dict = {}
         self.coverage = coverage
 
-    def add_exons(self):
+    def add_exons(self, genes_data_type):
         if self.strand == '+':
             self.working_exons.sort(key=lambda _exon: _exon.scaffold_start)
         elif self.strand == '-':
@@ -81,6 +81,10 @@ class Gene(GenomicSequence):
         prev = None
         for exon in self.working_exons:
             if prev:
+                if genes_data_type == 'manual':
+                    if prev.scaffold_end == exon.scaffold_start:
+                        prev.merge_exons(exon)
+                        continue
                 prev.next_exon = exon
                 exon.prev_exon = prev
             self.exons.append(exon)
@@ -625,6 +629,10 @@ class Exon(GenomicSequence):
         self.prev_intron = prev_intron
         self.next_intron = next_intron
 
+    def merge_exons(self, next_exon):
+        self.sequence += next_exon.sequence
+        self.scaffold_end = next_exon.scaffold_end
+
 
 class Transcript():
     def __init__(self, scaffold_name, start, end, sequence='', strand=''):
@@ -655,7 +663,7 @@ def create(genome_path, genes_gff_path, genes_data_type):
     genome = read_genome(genome_path)
     genes = read_genes(genes_gff_path, genes_data_type)
     for name, gene in list(genes.items()):
-        gene.add_exons()
+        gene.add_exons(genes_data_type)
         gene.extract_sequence(genome)
         gene.create_introns()
     #predict_all_introns(genes)
@@ -820,6 +828,7 @@ def compute_intron_characteristics(seq):#prev_exon_seq, intron_seq, next_exon_se
     return np.array([e_y_cnt, i_r_cnt, i_C_cnt, i_A_cnt, i_G_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt])
 
 
+# as for 17/11/22 no longer in use
 def predict_all_introns(genes):
     introns_to_assess, their_characteristics = [], []
     for name, gene in list(genes.items()):
