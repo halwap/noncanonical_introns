@@ -660,7 +660,10 @@ def create(genome_path, genes_gff_path, genes_data_type):
     valid_data_type = {'stringtie', 'gmap', 'manual'}
     if genes_data_type not in valid_data_type:
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
-    genome = read_genome(genome_path)
+    if genes_data_type == 'manual':
+        genome = read_genome(genome_path, 'genbank')
+    else:
+        genome = read_genome(genome_path, 'fasta')
     genes = read_genes(genes_gff_path, genes_data_type)
     for name, gene in list(genes.items()):
         gene.add_exons(genes_data_type)
@@ -670,10 +673,10 @@ def create(genome_path, genes_gff_path, genes_data_type):
     return genome, genes
 
 
-def read_genome(file_path):
+def read_genome(file_path, file_type):
     genome = defaultdict(str)
     with open(file_path) as f:
-        for record in SeqIO.parse(f, 'fasta'):
+        for record in SeqIO.parse(f, file_type):
             genome[record.id] = str(record.seq)
     return genome
 
