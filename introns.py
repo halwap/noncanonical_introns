@@ -56,13 +56,13 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, name='', coverage=0, exons=[]):
+                 transcript=None, name='', coverage=0, exons=None):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
         self.working_exons = []
-        self.exons = exons
+        self.exons = exons if exons else []
         self.introns = []
         self.name = name
         self.expanded_sequence = ''
@@ -657,20 +657,87 @@ def process_file(file_path):
 
 
 def create(genome_path, genes_gff_path, genes_data_type):
-    valid_data_type = {'stringtie', 'gmap', 'manual'}
+    valid_data_type = {'stringtie', 'gmap'}
     if genes_data_type not in valid_data_type:
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
-    if genes_data_type == 'manual':
-        genome = read_genome(genome_path, 'genbank')
-    else:
-        genome = read_genome(genome_path, 'fasta')
+    genome = read_genome(genome_path, 'fasta')
     genes = read_genes(genes_gff_path, genes_data_type)
     for name, gene in list(genes.items()):
         gene.add_exons(genes_data_type)
         gene.extract_sequence(genome)
         gene.create_introns()
-    #predict_all_introns(genes)
+    # predict_all_introns(genes)
     return genome, genes
+
+
+def create_manual(genbank_path):
+    """
+    Returns genes and genome objects.
+    :param genbank_path: [
+    :return: two dictionaries, genes = {} and genome = {gene_name:scaffold_seq}
+    """
+    label_dict = create_label_dict()
+    genes = {}
+    genome = defaultdict(str)
+    with open(genbank_path) as f:
+        for record in SeqIO.parse(f, "genbank"):
+            gene_name, gene = record.name, None
+            list_of_exons = []
+            gene_start, gene_end = 1000000, 0
+            sequence = str(record.seq)
+            genome[gene_name] = sequence
+            for feature in record.features:
+                start, end = int(feature.location.start.position), int(feature.location.end.position)
+                if feature.type == 'exon':
+                    if start < gene_start:
+                        gene_start = start
+                    if end > gene_end:
+                        gene_end = end
+                    exon = Exon(gene_name, start, end, strand='+', gene=None)
+                    list_of_exons.append(exon)
+            gene = Gene(gene_name, gene_start, gene_end, name=gene_name, strand='+', exons=[])
+            for exon in list_of_exons:
+                exon.gene = gene
+            gene.working_exons = list_of_exons
+            gene.add_exons('manual')
+            gene.extract_sequence(genome)
+            try:
+                gene.create_introns()
+            except Exception as exc:
+                print(gene_name)
+                print(gene)
+                raise exc
+            for feature_listed in record.features:
+                start, end = int(feature_listed.location.start.position), int(feature_listed.location.end.position)
+                if 'label' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['label'][0]
+                elif 'standard_name' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['standard_name'][0]
+                else:
+                    print(feature_listed.qualifiers)
+            if label in label_dict.keys():
+                label = label_dict[label]
+                try:
+                    intron_obj = gene.introns_dict[(start, end)]
+                except KeyError:
+                    continue
+                intron_obj.add_manual_annotation(label, start, end)
+        genes[gene_name] = gene
+    return genes, genome
+
+
+def create_label_dict():
+    k_labels = ['Intron K', 'Inron K', 'Intron K (EL, EG)', 'Intron K ', 'Exon K', "Intron K (5' partial)"]
+    nk_labels = ['Intron N', 'Intron N (EH)', 'Intron NK', 'Intron NK ', 'Intron N ', 'Intron NK (polimorfizm)']
+    i_labels = ['Intron I', 'Intron I ', 'I', 'Intron P']
+    label_dict = {}
+    for i in k_labels:
+        label_dict[i] = 'intron_K'
+    for i in nk_labels:
+        label_dict[i] = 'intron_NK'
+    for i in i_labels:
+        label_dict[i] = 'intron_I'
+    return label_dict
 
 
 def read_genome(file_path, file_type):
@@ -758,7 +825,6 @@ def read_genes_manual(filename):
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
                 gene.working_exons.append(exon)
     return genes
-
 
 
 def complement(seq):
