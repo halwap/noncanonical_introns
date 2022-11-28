@@ -722,7 +722,7 @@ def create_manual(genbank_path):
                 except KeyError:
                     continue
                 intron_obj.add_manual_annotation(label, start, end)
-        genes[gene_name] = gene
+            genes[gene_name] = gene
     return genes, genome
 
 
