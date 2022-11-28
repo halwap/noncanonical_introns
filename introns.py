@@ -715,13 +715,13 @@ def create_manual(genbank_path):
                     label = feature_listed.qualifiers['standard_name'][0]
                 else:
                     label = ''
-            if label in label_dict.keys():
-                label = label_dict[label]
-                try:
-                    intron_obj = gene.introns_dict[(start, end)]
-                except KeyError:
-                    continue
-                intron_obj.add_manual_annotation(label, start, end)
+                if label in label_dict.keys():
+                    label = label_dict[label]
+                    try:
+                        intron_obj = gene.introns_dict[(start, end)]
+                    except KeyError:
+                        continue
+                    intron_obj.add_manual_annotation(label, start, end)
             genes[gene_name] = gene
     return genes, genome
 
