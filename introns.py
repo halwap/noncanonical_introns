@@ -714,7 +714,7 @@ def create_manual(genbank_path):
                 elif 'standard_name' in feature_listed.qualifiers.keys():
                     label = feature_listed.qualifiers['standard_name'][0]
                 else:
-                    print(feature_listed.qualifiers)
+                    label = ''
             if label in label_dict.keys():
                 label = label_dict[label]
                 try:
