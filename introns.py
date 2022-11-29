@@ -6,11 +6,11 @@ import pickle
 import numpy as np
 
 
-conventional_model = pickle.load(open('15_11_K_model.sav', 'rb'))
+conventional_model = pickle.load(open('29_11_K_model.sav', 'rb'))
 #conventional_model = pickle.load(open('finalized_model.sav', 'rb'))
 #nonconventional_model = pickle.load(open('18_08_binary_model_NK_vs_var.sav', 'rb'))
 #nonconventional_model = pickle.load(open('13_07_binary_model.sav', 'rb'))
-nonconventional_model = pickle.load(open('15_11_K_model.sav', 'rb'))
+nonconventional_model = pickle.load(open('29_11_K_model.sav', 'rb'))
 
 
 def getter_setter_gen(name, type_):
@@ -179,8 +179,8 @@ class Gene(GenomicSequence):
         nonconv_predictions = nonconventional_model.predict(their_characteristics)
         nonconv_scores = nonconventional_model.predict_proba(their_characteristics)[:, 1]
         for i, c_pred, c_score, nc_pred, nc_score in \
-                zip(introns_to_assess, conv_predictions, conv_scores, nonconv_predictions, nonconv_scores):
-            print(i, c_pred, c_score, nc_pred, nc_score)
+                zip(introns_to_assess, conv_predictions, conv_scores,
+                    nonconv_predictions, nonconv_scores):
             i.ML_class = [c_pred, nc_pred]
             i.ML_conv_score = c_score
             i.ML_nonconv_score = nc_score
