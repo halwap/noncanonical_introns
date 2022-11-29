@@ -6,8 +6,11 @@ import pickle
 import numpy as np
 
 
-conventional_model = pickle.load(open('finalized_model.sav', 'rb'))
-nonconventional_model = pickle.load(open('18_08_binary_model_NK_vs_var.sav', 'rb'))
+conventional_model = pickle.load(open('15_11_K_model.sav', 'rb'))
+#conventional_model = pickle.load(open('finalized_model.sav', 'rb'))
+#nonconventional_model = pickle.load(open('18_08_binary_model_NK_vs_var.sav', 'rb'))
+#nonconventional_model = pickle.load(open('13_07_binary_model.sav', 'rb'))
+nonconventional_model = pickle.load(open('15_11_K_model.sav', 'rb'))
 
 
 def getter_setter_gen(name, type_):
@@ -56,13 +59,13 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, name='', coverage=0, exons=[]):
+                 transcript=None, name='', coverage=0, exons=None):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
         self.working_exons = []
-        self.exons = exons
+        self.exons = exons if exons else []
         self.introns = []
         self.name = name
         self.expanded_sequence = ''
@@ -71,7 +74,7 @@ class Gene(GenomicSequence):
         self.introns_dict = {}
         self.coverage = coverage
 
-    def add_exons(self):
+    def add_exons(self, genes_data_type):
         if self.strand == '+':
             self.working_exons.sort(key=lambda _exon: _exon.scaffold_start)
         elif self.strand == '-':
@@ -81,6 +84,10 @@ class Gene(GenomicSequence):
         prev = None
         for exon in self.working_exons:
             if prev:
+                if genes_data_type == 'manual':
+                    if prev.scaffold_end == exon.scaffold_start:
+                        prev.merge_exons(exon)
+                        continue
                 prev.next_exon = exon
                 exon.prev_exon = prev
             self.exons.append(exon)
@@ -170,16 +177,17 @@ class Gene(GenomicSequence):
         #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
         conv_scores = conventional_model.predict_proba(their_characteristics)[:, 1]
         nonconv_predictions = nonconventional_model.predict(their_characteristics)
-        nonconv_scores = nonconventional_model.decision_function(their_characteristics)
+        nonconv_scores = nonconventional_model.predict_proba(their_characteristics)[:, 1]
         for i, c_pred, c_score, nc_pred, nc_score in \
                 zip(introns_to_assess, conv_predictions, conv_scores, nonconv_predictions, nonconv_scores):
+            print(i, c_pred, c_score, nc_pred, nc_score)
             i.ML_class = [c_pred, nc_pred]
             i.ML_conv_score = c_score
             i.ML_nonconv_score = nc_score
-        # for intron in self.introns:
-        #     var_probas = [v.ML_nonconv_proba for v in intron.variations]
-            # intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
-            # intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
+        for intron in self.introns:
+            var_probas = [v.ML_nonconv_score for v in intron.variations]
+            intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
+            intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
         return
 
     def create_introns(self):
@@ -625,6 +633,10 @@ class Exon(GenomicSequence):
         self.prev_intron = prev_intron
         self.next_intron = next_intron
 
+    def merge_exons(self, next_exon):
+        self.sequence += next_exon.sequence
+        self.scaffold_end = next_exon.scaffold_end
+
 
 class Transcript():
     def __init__(self, scaffold_name, start, end, sequence='', strand=''):
@@ -649,23 +661,93 @@ def process_file(file_path):
 
 
 def create(genome_path, genes_gff_path, genes_data_type):
-    valid_data_type = {'stringtie', 'gmap', 'manual'}
+    valid_data_type = {'stringtie', 'gmap'}
     if genes_data_type not in valid_data_type:
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
-    genome = read_genome(genome_path)
+    genome = read_genome(genome_path, 'fasta')
     genes = read_genes(genes_gff_path, genes_data_type)
     for name, gene in list(genes.items()):
-        gene.add_exons()
+        gene.add_exons(genes_data_type)
         gene.extract_sequence(genome)
         gene.create_introns()
-    #predict_all_introns(genes)
+    # predict_all_introns(genes)
     return genome, genes
 
 
-def read_genome(file_path):
+def create_manual(genbank_path):
+    """
+    Returns genes and genome objects.
+    :param genbank_path: [
+    :return: two dictionaries, genes = {} and genome = {gene_name:scaffold_seq}
+    """
+    label_dict = create_label_dict()
+    genes = {}
+    genome = defaultdict(str)
+    with open(genbank_path) as f:
+        for record in SeqIO.parse(f, "genbank"):
+            gene_name, gene = record.name, None
+            list_of_exons = []
+            gene_start, gene_end = 1000000, 0
+            sequence = str(record.seq)
+            genome[gene_name] = sequence
+            for feature in record.features:
+                start, end = int(feature.location.start.position), int(feature.location.end.position)
+                if feature.type == 'exon':
+                    if start < gene_start:
+                        gene_start = start
+                    if end > gene_end:
+                        gene_end = end
+                    exon = Exon(gene_name, start, end, strand='+', gene=None)
+                    list_of_exons.append(exon)
+            gene = Gene(gene_name, gene_start, gene_end, name=gene_name, strand='+', exons=[])
+            for exon in list_of_exons:
+                exon.gene = gene
+            gene.working_exons = list_of_exons
+            gene.add_exons('manual')
+            gene.extract_sequence(genome)
+            try:
+                gene.create_introns()
+            except Exception as exc:
+                print(gene_name)
+                print(gene)
+                raise exc
+            for feature_listed in record.features:
+                start, end = int(feature_listed.location.start.position), int(feature_listed.location.end.position)
+                if 'label' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['label'][0]
+                elif 'standard_name' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['standard_name'][0]
+                else:
+                    label = ''
+                if label in label_dict.keys():
+                    label = label_dict[label]
+                    try:
+                        intron_obj = gene.introns_dict[(start, end)]
+                    except KeyError:
+                        continue
+                    intron_obj.add_manual_annotation(label, start, end)
+            genes[gene_name] = gene
+    return genes, genome
+
+
+def create_label_dict():
+    k_labels = ['Intron K', 'Inron K', 'Intron K (EL, EG)', 'Intron K ', 'Exon K', "Intron K (5' partial)"]
+    nk_labels = ['Intron N', 'Intron N (EH)', 'Intron NK', 'Intron NK ', 'Intron N ', 'Intron NK (polimorfizm)']
+    i_labels = ['Intron I', 'Intron I ', 'I', 'Intron P']
+    label_dict = {}
+    for i in k_labels:
+        label_dict[i] = 'intron_K'
+    for i in nk_labels:
+        label_dict[i] = 'intron_NK'
+    for i in i_labels:
+        label_dict[i] = 'intron_I'
+    return label_dict
+
+
+def read_genome(file_path, file_type):
     genome = defaultdict(str)
     with open(file_path) as f:
-        for record in SeqIO.parse(f, 'fasta'):
+        for record in SeqIO.parse(f, file_type):
             genome[record.id] = str(record.seq)
     return genome
 
@@ -761,10 +843,7 @@ def reverse_complement(seq):
 
 
 def complimentary(n1, n2):
-    if {n1, n2} in [{'A', 'T'}, {'C', 'G'}, {'G', 'T'}]:
-        return True
-    else:
-        return False
+    return {n1, n2} in [{'A', 'T'}, {'C', 'G'}, {'G', 'T'}]
 
 
 def calculate_pairing(str1, str2):
@@ -787,38 +866,57 @@ def calculate_pyrimidine_content(seq):
 
 
 def compute_intron_characteristics(seq):#prev_exon_seq, intron_seq, next_exon_seq):
-    if type(seq)==Intron:
+    if type(seq)==str:
+        prev_exon_seq = seq[:5]
+        intron_seq = seq[5:-5]
+        next_exon_seq = seq[-5:]
+    else: # type(seq)==Intron
         prev_exon_seq = seq.prev_exon.sequence[-5:]
         intron_seq = seq.sequence
         next_exon_seq = seq.next_exon.sequence[:5]
+        seq = prev_exon_seq + intron_seq + next_exon_seq
     baseY = {'C', 'T'}
     baseR = {'A', 'G'}
 
-    e_y_cnt, i_r_cnt, i_C_cnt, i_A_cnt, i_G_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt = 0, 0, 0, 0, 0, 0, 0, 0
+    e_y_cnt, i_r_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt = 0, 0, 0, 0, 0
 
-    c, a, t, g = False, False, False, False
     if len(prev_exon_seq)<1: return False
-    if prev_exon_seq[-1] in baseY:
-        e_y_cnt = 1
-    if intron_seq[0] in baseR:
-        i_r_cnt = 1
-    if intron_seq[3] == 'C' and intron_seq[-6] == 'G':
-        c = True
-        i_C_cnt = 1
-    if intron_seq[4] == 'A' and intron_seq[-7] == 'T':
-        a = True
-        i_A_cnt = 1
-    if intron_seq[5] == 'G' and intron_seq[-8] == 'C':
-        g = True
-        i_G_cnt = 1
-    if c and a and g:
-        i_CAG_cnt = 1
-    if intron_seq[-1] in baseY:
-        i_y_cnt = 1
-    if next_exon_seq[0] in baseR:
-        e_r_cnt = 1
-    return np.array([e_y_cnt, i_r_cnt, i_C_cnt, i_A_cnt, i_G_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt])
+    if prev_exon_seq[-1] in baseY: e_y_cnt = 1
+    if intron_seq[0] in baseR: i_r_cnt = 1
+    if intron_seq[3:6]=="CAG" and intron_seq[-8:-5]=="CTG": i_CAG_cnt = 1
+    if intron_seq[-1] in baseY: i_y_cnt = 1
+    if next_exon_seq[0] in baseR: e_r_cnt = 1
+    pl2, pl1, pl3 = intron_pairing_score(seq, whether_weighted_scores = True)[:3]
+    return np.array([e_y_cnt, i_r_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt, pl2, pl1, pl3])
 
+def intron_pairing_score(sequence, whether_weighted_scores = False):
+    def pairing_length(s, start=0, end=-1):
+        n = len(s[start:end])/2
+        x, y = start, end
+        best_pairing_length = 0.
+        pairing_length = 0.
+        total_pairings = 0.
+        while x<=20:
+            if total_pairings > 20: print("x =", x, total_pairings)
+            if complimentary(s[x], s[y]):
+                #print(s[x], s[y], introns.weigh_pairings(s[x], s[y]))
+                pairing_length += 1. if whether_weighted_scores==False else weigh_pairings(s[x], s[y])
+                total_pairings += 1. if whether_weighted_scores==False else weigh_pairings(s[x], s[y])
+            else: #if the pair is not complementary
+                best_pairing_length = max(best_pairing_length, pairing_length)
+                pairing_length = 0.
+            #przesuniecie do nastepnej pary
+            x += 1
+            y -= 1
+        best_pairing_length = max(best_pairing_length, pairing_length)
+        if whether_weighted_scores == True:
+            best_pairing_length, total_pairings = best_pairing_length, total_pairings
+        return best_pairing_length, total_pairings
+    
+    pl2, tp2 = pairing_length(sequence, 0, -3) #przesuniecie o 2
+    pl1, tp1 = pairing_length(sequence, 0, -2) #przesuniecie o 1
+    pl3, tp3 = pairing_length(sequence, 0, -4) #przesuniecie o 3
+    return [pl2, pl1, pl3, tp2, tp1, tp3]
 
 def predict_all_introns(genes):
     introns_to_assess, their_characteristics = [], []
@@ -832,8 +930,8 @@ def predict_all_introns(genes):
     print(len(introns_to_assess), len(their_characteristics))
     assert len(their_characteristics) > 0
     predictions = loaded_model.predict(their_characteristics)
-    #probas = loaded_model.predict_proba(their_characteristics)[:,1]
-    probas = loaded_model.decision_function(their_characteristics)
+    probas = loaded_model.predict_proba(their_characteristics)#[:,1]
+    #probas = loaded_model.decision_function(their_characteristics)
     for i, pred, prob in zip(introns_to_assess, predictions, probas):
         if pred == 1:  i.ML_is_nonconventional = True
         i.ML_nonconv_proba = prob
@@ -843,3 +941,11 @@ def predict_all_introns(genes):
         intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
     return
 
+def weigh_pairings(nn1, nn2):
+    nn = nn1+nn2
+    if nn in ["AT", "TA"]: return 0.5
+    elif nn in ["GC", "CG"]: return 1
+    elif nn in ["GT", "TG"]: return 0.375
+    else: return 0
+    
+    
