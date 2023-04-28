@@ -5,13 +5,16 @@ from re import search
 import pickle
 import numpy as np
 
+ncfile = open('./files_for_classifiers/28_04_NK_model.sav', 'rb')
+nonconventional_model = pickle.load(ncfile)
+conventional_model = pickle.load(open('./files_for_classifiers/28_04_K_model.sav', 'rb'))
+#nonconventional_model = pickle.load(open('./files_for_classifiers/29_11_NK_model.sav', 'rb'))
+#conventional_model = pickle.load(open('./files_for_classifiers/29_11_K_model.sav', 'rb'))
+#nonconventional_model = pickle.load(open('./files_for_classifiers/15_11_NK_model.sav', 'rb'))
+#conventional_model = pickle.load(open('./files_for_classifiers/15_11_K_model.sav', 'rb'))
 
-conventional_model = pickle.load(open('29_11_K_model.sav', 'rb'))
-#conventional_model = pickle.load(open('finalized_model.sav', 'rb'))
-#nonconventional_model = pickle.load(open('18_08_binary_model_NK_vs_var.sav', 'rb'))
-#nonconventional_model = pickle.load(open('13_07_binary_model.sav', 'rb'))
-nonconventional_model = pickle.load(open('29_11_K_model.sav', 'rb'))
-
+def get_conventional_model(): return conventional_model
+def get_nonconventional_model(): return nonconventional_model
 
 def getter_setter_gen(name, type_):
     def getter(self):
@@ -173,11 +176,11 @@ class Gene(GenomicSequence):
                 their_characteristics.append(compute_intron_characteristics(var))
         if len(their_characteristics) == 0:
             return
-        conv_predictions = conventional_model.predict(their_characteristics)
-        #probas = loaded_model.predict_proba(their_characteristics)[:, 1]
+        # WAŻNE nie pomylić indeksów, conv to 1 a nonconv to 0
+        conv_predictions = 1-conventional_model.predict(their_characteristics)
         conv_scores = conventional_model.predict_proba(their_characteristics)[:, 1]
         nonconv_predictions = nonconventional_model.predict(their_characteristics)
-        nonconv_scores = nonconventional_model.predict_proba(their_characteristics)[:, 1]
+        nonconv_scores = nonconventional_model.predict_proba(their_characteristics)[:, 0]
         for i, c_pred, c_score, nc_pred, nc_score in \
                 zip(introns_to_assess, conv_predictions, conv_scores,
                     nonconv_predictions, nonconv_scores):
@@ -186,8 +189,10 @@ class Gene(GenomicSequence):
             i.ML_nonconv_score = nc_score
         for intron in self.introns:
             var_probas = [v.ML_nonconv_score for v in intron.variations]
-            intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
-            intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
+            intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)]\
+                if len(var_probas) else intron
+            intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)]\
+                if len(var_probas) else intron
         return
 
     def create_introns(self):
@@ -304,7 +309,7 @@ class Intron(GenomicSequence):
         self.polypyrimidine_tract = polypyrimidine_tract
         self.conserved_pairing_score = 0
         self.ML_characteristic = np.zeros(8)
-        self.ML_class = None
+        self.ML_class = None #[is k, is nk]
         self.ML_is_nonconventional = False
         self.ML_best_conv_version = None
         self.ML_best_nonconv_version = None
@@ -505,11 +510,12 @@ class Intron(GenomicSequence):
             print(self.sequence)
             print(self.scaffold_name, self.scaffold_start, self.scaffold_end)
             print(self.prev_exon, self.next_exon)
-            raise exc
+            #raise exc
 
     def check_ML(self):
-        if not self.ML_characteristic:
+        if np.all(self.ML_characteristic == 0):
             self.calculate_ML_characteristic()
+        # WAŻNE czy modele tak działają? czy z obu bierze się pozycje [0,1]?
         result_K = conventional_model.predict(self.ML_characteristic)[0]
         score_K = conventional_model.predict_proba(self.ML_characteristic)[0][1]
         result_NK = nonconventional_model.predict(self.ML_characteristic)[0]
@@ -538,6 +544,22 @@ class Intron(GenomicSequence):
         #    self.ML_best_conv_version = self.variations[best_conv_v_ind]
         #    self.ML_best_nonconv_version = self.variations[best_nonconv_v_ind]
         # return result, proba
+    
+    def is_ML_conv(self):
+        """Returns whether the intron object is classified as conventional
+        by the ML model"""
+        return bool(self.ML_class[0])
+    
+    def is_ML_nonconv(self):
+        """Returns whether the intron object is classified as conventional
+        by the ML model"""
+        return bool(self.ML_class[1])
+    
+    def get_ML_classification(self, k_or_nk):
+        if k_or_nk == "K": return self.is_ML_conv()
+        elif k_or_nk == "NK": return self.is_ML_nonconv()
+        else:
+            print("Only allowed types to check are K for conventional or NK for nonconventional")
 
     def calculate_ML_characteristic(self):
         if not self.prev_exon or not self.next_exon:
@@ -621,6 +643,11 @@ class Intron(GenomicSequence):
                 self.test_annotation = 'intron_NK'
             else:
                 self.test_annotation = 'intron_NN'
+    def is_man_K(self):
+        return self.man_annotation == 'intron_K'
+    
+    def is_man_NK(self):
+        return self.man_annotation == 'intron_NK'
 
 
 class Exon(GenomicSequence):
@@ -666,11 +693,11 @@ def create(genome_path, genes_gff_path, genes_data_type):
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
     genome = read_genome(genome_path, 'fasta')
     genes = read_genes(genes_gff_path, genes_data_type)
-    for name, gene in list(genes.items()):
+    for _, gene in list(genes.items()):
         gene.add_exons(genes_data_type)
         gene.extract_sequence(genome)
         gene.create_introns()
-    # predict_all_introns(genes)
+    predict_all_introns(genes)
     return genome, genes
 
 
@@ -727,6 +754,7 @@ def create_manual(genbank_path):
                         continue
                     intron_obj.add_manual_annotation(label, start, end)
             genes[gene_name] = gene
+        predict_all_introns(genes)
     return genes, genome
 
 
@@ -919,8 +947,9 @@ def intron_pairing_score(sequence, whether_weighted_scores = False):
     return [pl2, pl1, pl3, tp2, tp1, tp3]
 
 def predict_all_introns(genes):
+    print("Predicting ML classes for introns")
     introns_to_assess, their_characteristics = [], []
-    for name, gene in list(genes.items()):
+    for _, gene in list(genes.items()):
         for intron in gene.introns:
             introns_to_assess.append(intron)
             their_characteristics.append(compute_intron_characteristics(intron))
@@ -928,18 +957,60 @@ def predict_all_introns(genes):
                 introns_to_assess.append(var)
                 their_characteristics.append(compute_intron_characteristics(var))
     print(len(introns_to_assess), len(their_characteristics))
+    print("Finished predicting ML classes for introns!")
     assert len(their_characteristics) > 0
-    predictions = loaded_model.predict(their_characteristics)
-    probas = loaded_model.predict_proba(their_characteristics)#[:,1]
+    
+    predictions_conv = conventional_model.predict(their_characteristics)
+    predictions_nonconv = nonconventional_model.predict(their_characteristics)
+    probas_conv = conventional_model.predict_proba(their_characteristics)
+    probas_nonconv = nonconventional_model.predict_proba(their_characteristics)
+    #@TODO tu jest coś nie tak, gdzieś zwracane jest to samo dla obu model
+    
     #probas = loaded_model.decision_function(their_characteristics)
-    for i, pred, prob in zip(introns_to_assess, predictions, probas):
-        if pred == 1:  i.ML_is_nonconventional = True
-        i.ML_nonconv_proba = prob
-    for intron in introns_to_assess:
-        var_probas = [v.ML_nonconv_proba for v in intron.variations]
-        intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)] if len(var_probas) else intron
-        intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)] if len(var_probas) else intron
+    for (i, pred_nc, pred_c, prob_c, prob_nc) in\
+        zip(introns_to_assess, predictions_nonconv, predictions_conv, probas_conv, probas_nonconv):
+        i.ML_nonconv_score = prob_nc[1]
+        i.ML_conv_score = prob_c[0]
+        i.ML_class = (pred_c, pred_nc)
+    #for intron in introns_to_assess:
+        var_probas_conv = [v.ML_conv_score for v in i.variations]
+        var_probas_nonconv = [v.ML_nonconv_score for v in i.variations]
+        i.ML_best_conv_version = i.variations[np.argmin(var_probas_conv)] if len(var_probas_conv) else i
+        i.ML_best_nonconv_version = i.variations[np.argmax(var_probas_nonconv)] if len(var_probas_nonconv) else i
     return
+
+'''
+if np.all(self.ML_characteristic == 0):
+            self.calculate_ML_characteristic()
+        result_K = conventional_model.predict(self.ML_characteristic)[0]
+        score_K = conventional_model.predict_proba(self.ML_characteristic)[0][1]
+        result_NK = nonconventional_model.predict(self.ML_characteristic)[0]
+        score_NK = nonconventional_model.predict_proba(self.ML_characteristic)[0][1]
+
+        self.ML_class = [result_K, result_NK]
+        self.ML_conv_score = score_K
+        self.ML_nonconv_score = score_NK
+        # if result_K == 1:
+        #     self.ML_is_nonconventional = True
+        # self.ML_nonconv_proba = proba
+        # self.ML_best_conv_version = self
+        # self.ML_best_nonconv_version = self
+        for var in self.variations:
+            var.check_ML()
+        # for var in self.variations:
+        #     c, p = var.check_ML()
+        #     if p > self.ML_best_nonconv_version.ML_nonconv_proba:
+        #         self.ML_best_nonconv_version = var
+        #     if p < self.ML_best_conv_version.ML_nonconv_proba:
+        #         self.ML_best_conv_version = var
+        # if var_probas:
+        #    if np.max(var_probas) > self.
+        #    best_conv_v_ind, best_nonconv_v_ind = np.argmin(var_probas), np.argmax(var_probas)
+        #    print(len(var_probas), (best_conv_v_ind, best_nonconv_v_ind))
+        #    self.ML_best_conv_version = self.variations[best_conv_v_ind]
+        #    self.ML_best_nonconv_version = self.variations[best_nonconv_v_ind]
+        # return result, proba
+        # '''
 
 def weigh_pairings(nn1, nn2):
     nn = nn1+nn2
@@ -947,5 +1018,56 @@ def weigh_pairings(nn1, nn2):
     elif nn in ["GC", "CG"]: return 1
     elif nn in ["GT", "TG"]: return 0.375
     else: return 0
+
+def get_introns_demulti(genes):
+    """
+    Get lists of conventional and nonconventional introns without repetitions
+    from manual annotations.
+
+    Args:
+        genes (_type_): _description_
+
+    Returns:
+        introns_K_demulti (_type_): a list of unique conventional introns
+        introns_NK_demulti (_type_): a list of unique nonconventional introns
+    """
+    introns_NK, introns_K, introns_I = [], [], []
+
+    for _, gene_obj in genes.items():
+        for intron in gene_obj.introns:
+            if intron.man_annotation == 'intron_NK':
+                introns_NK.append(intron)
+            if intron.man_annotation == 'intron_K':
+                introns_K.append(intron)
+            if intron.man_annotation == 'intron_I':
+                introns_I.append(intron)
+    print('Intron_K', len(introns_K))
+    print('Intron_NK', len(introns_NK))
+    print('intron_I', len(introns_I))
     
+    def demultiply_group(introns_X):
+        introns_X_demulti = []
+        single, double = [], {}
+        for intron in introns_X:
+            if intron.sequence in single:
+                for i in range(len(single)):
+                    if intron.sequence == single[i]:
+                        name_1, name_2 = str(introns_X_demulti[i]), str(intron)
+                        pos_1, pos_2 = name_1.split()[1:], name_2.split()[1:]
+                        if pos_1 != pos_2:
+                            if name_1 not in double.keys():
+                                double[name_1] = [name_1, name_2]
+                            else:
+                                double[name_1].append(name_2)
+            else:
+                single.append(intron.sequence)
+                introns_X_demulti.append(intron)
+        return introns_X_demulti
     
+    introns_K_demulti = demultiply_group(introns_K)
+    introns_NK_demulti = demultiply_group(introns_NK)
+                
+    print('introns_K_demulti', len(introns_K_demulti))
+    print('introns_NK_demulti', len(introns_NK_demulti))
+
+    return introns_K_demulti, introns_NK_demulti
