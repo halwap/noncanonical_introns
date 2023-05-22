@@ -1,0 +1,36 @@
+baseY = {'C', 'T'}
+baseR = {'A', 'G'}
+
+e_y_cnt, i_r_cnt, i_C_cnt, i_A_cnt, i_G_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt = 0, 0, 0, 0, 0, 0, 0, 0
+for intron in introns_NK:
+    c, a, t = False, False, False
+    if intron.prev_exon.sequence[-1] in baseY:
+        e_y_cnt += 1
+    if intron.sequence[0] in baseR:
+        i_r_cnt += 1
+    if intron.sequence[3] == 'C' and intron.sequence[-6] == 'G':
+        c = True
+        i_C_cnt += 1
+    if intron.sequence[4] == 'A' and intron.sequence[-7] == 'T':
+        a = True
+        i_A_cnt += 1
+    if intron.sequence[5] == 'G' and intron.sequence[-8] == 'C':
+        g = True
+        i_G_cnt += 1
+    if c and a and g:
+        i_CAG_cnt += 1
+    if intron.sequence[-1] in baseY:
+        i_y_cnt += 1
+    if intron.next_exon.sequence[0] in baseR:
+        e_r_cnt += 1
+
+tot = len(introns_NK)
+print('introny NK')
+print('eY| i', e_y_cnt/tot)
+print('e |Ri', i_r_cnt/tot)
+print('C-G', i_C_cnt/tot)
+print('A-T', i_A_cnt/tot)
+print('G-C', i_G_cnt/tot)
+print('CAG - CGT', i_CAG_cnt/tot)
+print('iY| e', i_y_cnt/tot)
+print('i |Re', e_r_cnt/tot)

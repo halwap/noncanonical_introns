@@ -1,0 +1,22 @@
+	kolumna "features"
+1: podstawowe cechy ['eY| i', 'e |Ri', 'CAG - CGT', 'iY| e', 'i |Re']
+2: podstawowe + parowanie z przesunięciem o 2
+3: podstawowe + parowanie z przesunięciem o 2 + o 1
+4: podstawowe + parowanie z przesunięciem o 2 + o 3
+5: podstawowe + parowanie z przesunięciem o 2 + o 1 + o 3
+6: podstawowe + funkcja wybierająca
+
+	kolumna "pl/tp"
+miarą przesunięcia jest długość najdłuższego parowania (pl - pairing length)
+lub liczba wszystkich parowań (tp - total pairings)
+
+	kolumna "weighted"
+czy wartość jest ważona przez siłę parowań
+
+	kolumna "K/NKvar"
+rozróżniane są introny niekonwencjonalne od konwencjonalnych ("K")
+czy od innych wariantów intronów niekonwencjonalnych ("NKvar")
+
+	kolumna "acc"
+wartość accuracy (liczba dobrze rozpoznanych przykładów / liczba wszystkich przykładów)
+w pliku _bac użyty jest balanced accuracy score, który lepiej działa kiedy klasy są różnej wielkości (kiedy jednych intronów jest znacząco więcej niż drugich)

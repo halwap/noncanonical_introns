@@ -2,7 +2,19 @@ from Bio import SeqIO
 from collections import defaultdict
 from copy import copy
 from re import search
+import pickle
+import numpy as np
 
+ncfile = open('./files_for_classifiers/28_04_NK_model.sav', 'rb')
+nonconventional_model = pickle.load(ncfile)
+conventional_model = pickle.load(open('./files_for_classifiers/28_04_K_model.sav', 'rb'))
+#nonconventional_model = pickle.load(open('./files_for_classifiers/29_11_NK_model.sav', 'rb'))
+#conventional_model = pickle.load(open('./files_for_classifiers/29_11_K_model.sav', 'rb'))
+#nonconventional_model = pickle.load(open('./files_for_classifiers/15_11_NK_model.sav', 'rb'))
+#conventional_model = pickle.load(open('./files_for_classifiers/15_11_K_model.sav', 'rb'))
+
+def get_conventional_model(): return conventional_model
+def get_nonconventional_model(): return nonconventional_model
 
 def getter_setter_gen(name, type_):
     def getter(self):
@@ -50,13 +62,13 @@ class GenomicSequence:
 
 class Gene(GenomicSequence):
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence='', strand='',
-                 transcript=None, exons=None, name='', coverage=0):
+                 transcript=None, name='', coverage=0, exons=None):
         # if strand == '-':
         #     start, end = end, start
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.transcript = transcript
         self.working_exons = []
-        self.exons = [] if exons==None else exons
+        self.exons = exons if exons else []
         self.introns = []
         self.name = name
         self.expanded_sequence = ''
@@ -65,33 +77,26 @@ class Gene(GenomicSequence):
         self.introns_dict = {}
         self.coverage = coverage
 
-    # def append_exons(self, exon):
-    #     self.exons.append(exon)
-
-    # def append_introns(self, intron):
-    #     self.introns.append(intron)
-
-    def add_exons(self):
+    def add_exons(self, genes_data_type):
         if self.strand == '+':
             self.working_exons.sort(key=lambda _exon: _exon.scaffold_start)
         elif self.strand == '-':
             self.working_exons.sort(key=lambda _exon: _exon.scaffold_start, reverse=True)
         else:
-            print(self.strand)
-            raise ValueError('gene strand not in {+, -}')
+            raise ValueError('gene strand not in [+, -]'.format(self.strand))
         prev = None
         for exon in self.working_exons:
             if prev:
+                if genes_data_type == 'manual':
+                    if prev.scaffold_end == exon.scaffold_start:
+                        prev.merge_exons(exon)
+                        continue
                 prev.next_exon = exon
                 exon.prev_exon = prev
             self.exons.append(exon)
             prev = exon
 
     def extract_sequence(self, genome):
-        # elif self.strand == '-':
-        #     sequence = genome[self.scaffold_name][self.scaffold_end:self.scaffold_start]
-        # else:
-        #     raise Exception('co jest')
         scaffold_seq = genome[self.scaffold_name]
         sequence = scaffold_seq[self.scaffold_start:self.scaffold_end]
         expanded_sequence, expansion_left, expansion_right = self.get_expanded_sequence(scaffold_seq)
@@ -112,9 +117,8 @@ class Gene(GenomicSequence):
             elif self.strand == '-':
                 exon.sequence = self.sequence[- exon.scaffold_end + self.scaffold_end:
                                               - exon.scaffold_start + self.scaffold_end]
-            # else:
-                # print(self.name, exon.scaffold_name, exon.scaffold_start, exon.scaffold_end)
-                # raise Exception('co jest')
+            else:
+                raise ValueError('gene strand: {} not in [+, -]'.format(self.strand))
         transcript_sequence = self.get_transcript_sequence()
         self.transcript = Transcript(self.scaffold_name, self.scaffold_start, self.scaffold_end, strand=self.strand,
                                      sequence=transcript_sequence)
@@ -162,17 +166,42 @@ class Gene(GenomicSequence):
             sequence = self.expansion_left * '-' + sequence + self.expansion_right * '-'
         return sequence
 
+    def predict_introns(self):
+        introns_to_assess, their_characteristics = [], []
+        for intron in self.introns:
+            introns_to_assess.append(intron)
+            their_characteristics.append(compute_intron_characteristics(intron))
+            for var in intron.variations:
+                introns_to_assess.append(var)
+                their_characteristics.append(compute_intron_characteristics(var))
+        if len(their_characteristics) == 0:
+            return
+        # WAŻNE nie pomylić indeksów, conv to 1 a nonconv to 0
+        conv_predictions = 1-conventional_model.predict(their_characteristics)
+        conv_scores = conventional_model.predict_proba(their_characteristics)[:, 1]
+        nonconv_predictions = nonconventional_model.predict(their_characteristics)
+        nonconv_scores = nonconventional_model.predict_proba(their_characteristics)[:, 0]
+        for i, c_pred, c_score, nc_pred, nc_score in \
+                zip(introns_to_assess, conv_predictions, conv_scores,
+                    nonconv_predictions, nonconv_scores):
+            i.ML_class = [c_pred, nc_pred]
+            i.ML_conv_score = c_score
+            i.ML_nonconv_score = nc_score
+        for intron in self.introns:
+            var_probas = [v.ML_nonconv_score for v in intron.variations]
+            intron.ML_best_conv_version = intron.variations[np.argmin(var_probas)]\
+                if len(var_probas) else intron
+            intron.ML_best_nonconv_version = intron.variations[np.argmax(var_probas)]\
+                if len(var_probas) else intron
+        return
+
     def create_introns(self):
         if len(self.exons) < 1:
             raise ValueError('No exons specified.')
-            return
         elif len(self.exons) > 1:
             self.introns = []
             start, end = 0, 0
             for exon in self.exons:
-                if not exon.prev_intron and not exon.next_intron:
-                    print('The exon has no introns')
-                    return
                 prev_exon = exon.prev_exon
                 if self.strand == '+':
                     end = exon.scaffold_start
@@ -186,16 +215,8 @@ class Gene(GenomicSequence):
                     intron = Intron(self.scaffold_name, scaffold_start=start, scaffold_end=end, strand=self.strand,
                                     sequence=sequence, gene=self, prev_exon=prev_exon, next_exon=exon)
                     self.introns.append(intron)
-                    if prev_exon and prev_exon.next_intron:
-                        prev_exon.next_intron = intron
-                    else:
-                        prev_exon.next_intron = None
+                    prev_exon.next_intron = intron
                     exon.prev_intron = intron
-                    # prev_exon = exon
-                    # elif self.strand == '-':
-                    #     self.append_introns(Intron(self.scaffold_name, end, start))
-                    # else:
-                    #     raise Exception('co jest')
                 if self.strand == '+':
                     start = exon.scaffold_end
                 elif self.strand == '-':
@@ -205,18 +226,6 @@ class Gene(GenomicSequence):
                 intron.conventional_version()
                 intron.nonconventional_version()
                 intron.add_test_annotation()
-        
-        # for intron in self.introns:
-        #     if self.strand == '-':
-        #         print(str(intron), intron.scaffold_start, self.scaffold_start, intron.scaffold_end, self.scaffold_start, self.strand, intron.strand)
-        #         intron.sequence = self.sequence[intron.scaffold_start - self.scaffold_start:intron.scaffold_end - self.scaffold_start]
-        #         print(self.sequence)
-        #         print(intron.sequence)
-        #     elif self.strand == '+':
-        #         print(str(intron), intron.scaffold_end, self.scaffold_end, intron.sscaffold_tart, self.scaffold_end, self.strand, intron.strand)
-        #         intron.sequence = self.sequence[- intron.scaffold_end + self.scaffold_end:- intron.scaffold_start + self.scaffold_end]
-        #         print(self.sequence)
-        #         print(intron.sequence)
 
 
 @auto_attr_check
@@ -237,11 +246,14 @@ class Intron(GenomicSequence):
     :param margin_left_seq: (str) Optional, end sequence from the preceding exon.
     :param margin_right_seq: (str) Optional, beginning sequence of the following exon.
     :param sequence: (str) Optional, genomic sequence of the intron.
-    :param is_conventional: (int) Optional, number of the conventional class the intron belongs to; if isn't conventional then 0.
-    :param is_nonconventional: (int) Optional, number of the nonconventional class the intron belongs to; if isn't nonconventional then 0.
+    :param is_conventional: (int) Optional, number of the conventional class the intron belongs to;
+    if isn't conventional then 0.
+    :param is_nonconventional: (int) Optional, number of the nonconventional class the intron belongs to;
+    if isn't nonconventional then 0.
     :param best_conv_var: (int) Optional, unique to main intron, absent in var
     iations; number of the best conventional class out of all variations.
-    :param best_nonconv_var: (int) Optional, unique to main intron, absent in variations; number of the best nonconventional class out of all variations.
+    :param best_nonconv_var: (int) Optional, unique to main intron, absent in variations;
+    number of the best nonconventional class out of all variations.
     """
     scaffold_name = str
     scaffold_start = int
@@ -262,11 +274,10 @@ class Intron(GenomicSequence):
     man_annotation = str
     test_annotation = str
 
-
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None,
                  margin_left=0, margin_right=0, margin_left_seq='', margin_right_seq='',
                  prev_exon=None, next_exon=None, man_annotation='', test_annotation='', test_global_annotation='',
-                 test_score=0, gc_content=0.0, polypyrimidine_tract=0.0):
+                 mother_of_intron=None, test_score=0, gc_content=0.0, polypyrimidine_tract=0.0):
         GenomicSequence.__init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=sequence, strand=strand)
         self.gene = gene
         self.support = support
@@ -275,6 +286,7 @@ class Intron(GenomicSequence):
         self.margin_left_seq = margin_left_seq
         self.margin_right_seq = margin_right_seq
         self.variations = []
+        self.mother_of_intron = mother_of_intron
         self.is_conventional = 0
         self.is_nonconventional = 0
         self.prev_exon = prev_exon
@@ -296,118 +308,36 @@ class Intron(GenomicSequence):
         self.gc_content = gc_content
         self.polypyrimidine_tract = polypyrimidine_tract
         self.conserved_pairing_score = 0
-        # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
+        self.ML_characteristic = np.zeros(8)
+        self.ML_class = None #[is k, is nk]
+        self.ML_is_nonconventional = False
+        self.ML_best_conv_version = None
+        self.ML_best_nonconv_version = None
+        self.ML_conv_score = 0
+        self.ML_nonconv_score = 0
+        # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji
+        #      - warianty ich nie maja i zawsze maja nie miec
         if self.strand == '-':
-            self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end, -self.scaffold_start + self.gene.scaffold_end
+            self.gene_start, self.gene_end = -self.scaffold_end + self.gene.scaffold_end,\
+                                             -self.scaffold_start + self.gene.scaffold_end
         elif self.strand == '+':
-            self.gene_start, self.gene_end = self.scaffold_start - self.gene.scaffold_start, self.scaffold_end - self.gene.scaffold_start
+            self.gene_start, self.gene_end = self.scaffold_start - self.gene.scaffold_start,\
+                                             self.scaffold_end - self.gene.scaffold_start
 
-    # def intersect(self, other_intron):
-    #     """
-    #     Checks if two introns cover partially the same area.
-    #
-    #     :param other_intron: (Intron) Intron with which intersection of self is checked.
-    #     :return: Bool: True if introns share at least one base, False otherwise.
-    #     """
-    #     if not isinstance(other_intron, Intron):
-    #         raise ValueError('Both introns must be instances of Intron class')
-    #
-    #     else:
-    #         if self.scaffold_name != other_intron.scaffold_name:
-    #             raise ValueError('Introns on different scaffold cannot intersect.')
-    #         if (self.scaffold_start in range(other_intron.scaffold_start, other_intron.scaffold_end))\
-    #                 or (self.scaffold_end in range(other_intron.scaffold_start, other_intron.scaffold_end))\
-    #                 or (self.scaffold_start < other_intron.scaffold_start and self.scaffold_end > other_intron.scaffold_end):
-    #             return True
-    #         else:
-    #             return False
-
-    # def classify_intersection(self, intron):
-    #     """
-    #     For two intersecting introns return the type of intersection
-    #
-    #     :param intron: (Intron) Intron with which type of intersection with self is checked.
-    #     :return: 2 if the introns are identical, 1 if only either start or end is the same, 0 otherwise.
-    #     """
-    #     if self.scaffold_name != intron.scaffold_name:
-    #         raise ValueError('Introns do not intersect at all.')
-    #     if self.scaffold_start == intron.sscaffold_tart and self.scaffold_end == intron.scaffold_end:
-    #         return 2
-    #     elif self.scaffold_start == intron.scaffold_start or self.scaffold_end == intron.scaffold_end:
-    #         return 1
-    #     else:
-    #        return 0
-
-    # not used at 16/09/21
-    # def movable_boundary(self):
-    #     # moglem zepsuc
-    #     # ja zaraz jeszcze bardziej popsuje
-    #     """
-    #     Check if there are repeats on the intron junctions so the intron position could be shifted without changing
-    #     transcript sequence. If there are, add new possible introns to self.variations.
-    #     """
-    #     i = 1
-    #     # start checking for repeats left from the junction
-    #     check = 'left'
-    #
-    #     while True:
-    #         left_base_index = self.margin_left - i
-    #         right_base_index = -self.margin_right - i
-    #         if left_base_index < 0 or right_base_index > -1:
-    #             # index out of boundary, change direction
-    #             if check == 'left':
-    #                 # end of going left, time to go right from the junction
-    #                 check = 'right'
-    #                 i = 0
-    #                 continue
-    #             else:
-    #                 # end of going right, both directions checked
-    #                 break
-    #
-    #         left_base = self.sequence[left_base_index]
-    #         right_base = self.sequence[right_base_index]
-    #         if left_base == right_base:
-    #             # there is a repeat on the junction
-    #             if check == 'left':
-    #                 new_left_margin, new_right_margin = self.margin_left - i, self.margin_right + i
-    #             else:
-    #                 new_left_margin, new_right_margin = self.margin_left - (i - 1), self.margin_right + (i - 1)
-    #             # TODO tu musi byc zmieniona sekwencja nowej wariacji
-    #             new_variation = Intron(self.scaffold_name, self.scaffold_start, self.scaffold_end,
-    #                                    margin_left=new_left_margin, margin_right=new_right_margin,
-    #                                    sequence=self.sequence)
-    #             self.variations.append(new_variation)
-    #         else:
-    #             if check == 'left':
-    #                 # end of going left, time to go right from the junction
-    #                 check = 'right'
-    #                 i = 0
-    #                 continue
-    #             else:
-    #                 # end of going right, both directions checked
-    #                 break
-    #
-    #         if check == 'left':
-    #             # going further left
-    #             i += 1
-    #         else:
-    #             # going further right
-    #             i -= 1
-        
     def movable_boundary_no_margins(self):
-        # moglem zepsuc
-        # ja zaraz jeszcze bardziej popsuje
         """
         Check if there are repeats on the intron junctions so the intron position could be shifted without changing
         transcript sequence. If there are, add new possible introns to self.variations.
         """
-
         if not self.prev_exon or not self.next_exon:
             return
         left_margin_sequence, right_margin_sequence = self.prev_exon.sequence, self.next_exon.sequence
         i = 1
         # start checking for repeats left from the junction
         check = 'left'
+        # print(self)
+        # print(' '.join([self.prev_exon.sequence[-5:], self.sequence[:5],
+        #                 self.sequence[-5:], self.next_exon.sequence[:5]]))
         while True:
             new_prev_exon = copy(self.prev_exon)
             new_next_exon = copy(self.next_exon)
@@ -416,7 +346,7 @@ class Intron(GenomicSequence):
                         or i > len(self.sequence)\
                         or left_margin_sequence[-i] != self.sequence[-i]:
                     check = 'right'
-                    i = 0
+                    i = 1
                     continue
                 new_seq = left_margin_sequence[-i:] + self.sequence[:-i]
                 new_prev_exon.sequence = new_prev_exon.sequence[:-i]
@@ -426,33 +356,39 @@ class Intron(GenomicSequence):
                 # creating new variation moved to the left
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start - i,
                                        scaffold_end=self.scaffold_end - i, gene=self.gene, sequence=new_seq,
-                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon, mother_of_intron=self)
+                # print(check, i, new_variation)
+                # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
             else:  # checking to the right
-                if i + 1 > len(right_margin_sequence)\
-                        or i + 1 > len(self.sequence)\
-                        or self.sequence[i] != right_margin_sequence[i]:
+                if i > len(right_margin_sequence)\
+                        or i > len(self.sequence)\
+                        or self.sequence[i - 1] != right_margin_sequence[i - 1]:
                     break
                 new_seq = self.sequence[i:] + right_margin_sequence[:i]
                 new_prev_exon.sequence = new_prev_exon.sequence + self.sequence[:i]
                 new_prev_exon.scaffold_end = new_prev_exon.scaffold_end + i
                 new_next_exon.sequence = new_next_exon.sequence[i:]
-                new_next_exon.scaffold_start = new_next_exon.scaffold_start+i
+                new_next_exon.scaffold_start = new_next_exon.scaffold_start + i
                 # creating new variation moved to the right
                 new_variation = Intron(self.scaffold_name, scaffold_start=self.scaffold_start + i,
                                        scaffold_end=self.scaffold_end + i, gene=self.gene, sequence=new_seq,
-                                       prev_exon=new_prev_exon, next_exon=new_next_exon)
-            self.variations.append(new_variation)
+                                       prev_exon=new_prev_exon, next_exon=new_next_exon, mother_of_intron=self)
+                # print(check, i, new_variation)
+                # print(' '.join([new_variation.prev_exon.sequence[-5:], new_variation.sequence[:5],
+                #                 new_variation.sequence[-5:], new_variation.next_exon.sequence[:5]]))
+                # TODO zadbac ladniej o to zeby sie krotkie egzony nie robily
+            if not len(new_variation.prev_exon.sequence) < 1 and not len(new_variation.next_exon.sequence) < 1:
+                self.variations.append(new_variation)
             i += 1
         self.gene.introns_dict[(self.scaffold_start, self.scaffold_end)] = self
         for var in self.variations:
             self.gene.introns_dict[(var.scaffold_start, var.scaffold_end)] = self
 
-
     def check_conventional(self):
-        """ Check if the intron junctions suggest the intron is conventional."""
+        """ Check if the intron junctions suggest the intron is conventional. """
         left_anchor = self.sequence[0:2]
         right_anchor = self.sequence[-2:]
-        
         if left_anchor in ['GT', 'GC'] and right_anchor == 'AG':
             return True
         elif left_anchor == 'CT' and right_anchor in ['AC', 'GC']:
@@ -461,10 +397,9 @@ class Intron(GenomicSequence):
             return False
 
     def check_nonconventional(self):
-        """Check if intron may be nonconventional according to our current knowledge, meaning it can form
+        """  Check if intron may be nonconventional according to our current knowledge, meaning it can form
         secondary structure in specific positions. Also check if variations with shifted junctions may be
-        nonconventional."""
-        # funkcje complimentary wyciagnelam poza te funkcje
+        nonconventional. """
         left_anchor = self.sequence[3: 5]
         right_anchor = self.sequence[-7:-5]
         if complimentary(left_anchor[0], right_anchor[1]) and complimentary(left_anchor[1], right_anchor[0]):
@@ -476,17 +411,15 @@ class Intron(GenomicSequence):
                     if son.check_nonconventional():
                         return True
             return False
-            
+
     def conventional_version(self):
         def rate(wersja):
             wagi = {0: 0, 1: 1, 2: 3, 3: 5, 4: 7, 5: 2, 6: 4, 7: 6, 8: 8}
             return wagi.get(wersja)
-        
         if self.sequence[0:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
             i = 4
         else:
             return
-        
         if not self.prev_exon or not self.next_exon:
             return
         left_margin_seq, right_margin_seq = self.prev_exon.sequence[-3:], self.next_exon.sequence[:3]
@@ -531,10 +464,6 @@ class Intron(GenomicSequence):
             else: return False
 
         seq = self.sequence
-        if len(seq) < 30:
-            self.is_nonconventional = 0
-            self.best_nonconv_var = 0
-            return
         if self.next_exon and self.next_exon.sequence:
             nex = self.next_exon.sequence[:3]
             nex = nex + ' ' * (3 - len(nex))
@@ -581,7 +510,61 @@ class Intron(GenomicSequence):
             print(self.sequence)
             print(self.scaffold_name, self.scaffold_start, self.scaffold_end)
             print(self.prev_exon, self.next_exon)
-            raise exc
+            #raise exc
+
+    def check_ML(self):
+        if np.all(self.ML_characteristic == 0):
+            self.calculate_ML_characteristic()
+        # WAŻNE czy modele tak działają? czy z obu bierze się pozycje [0,1]?
+        result_K = conventional_model.predict(self.ML_characteristic)[0]
+        score_K = conventional_model.predict_proba(self.ML_characteristic)[0][1]
+        result_NK = nonconventional_model.predict(self.ML_characteristic)[0]
+        score_NK = nonconventional_model.predict_proba(self.ML_characteristic)[0][1]
+
+        self.ML_class = [result_K, result_NK]
+        self.ML_conv_score = score_K
+        self.ML_nonconv_score = score_NK
+        # if result_K == 1:
+        #     self.ML_is_nonconventional = True
+        # self.ML_nonconv_proba = proba
+        # self.ML_best_conv_version = self
+        # self.ML_best_nonconv_version = self
+        for var in self.variations:
+            var.check_ML()
+        # for var in self.variations:
+        #     c, p = var.check_ML()
+        #     if p > self.ML_best_nonconv_version.ML_nonconv_proba:
+        #         self.ML_best_nonconv_version = var
+        #     if p < self.ML_best_conv_version.ML_nonconv_proba:
+        #         self.ML_best_conv_version = var
+        # if var_probas:
+        #    if np.max(var_probas) > self.
+        #    best_conv_v_ind, best_nonconv_v_ind = np.argmin(var_probas), np.argmax(var_probas)
+        #    print(len(var_probas), (best_conv_v_ind, best_nonconv_v_ind))
+        #    self.ML_best_conv_version = self.variations[best_conv_v_ind]
+        #    self.ML_best_nonconv_version = self.variations[best_nonconv_v_ind]
+        # return result, proba
+    
+    def is_ML_conv(self):
+        """Returns whether the intron object is classified as conventional
+        by the ML model"""
+        return bool(self.ML_class[0])
+    
+    def is_ML_nonconv(self):
+        """Returns whether the intron object is classified as conventional
+        by the ML model"""
+        return bool(self.ML_class[1])
+    
+    def get_ML_classification(self, k_or_nk):
+        if k_or_nk == "K": return self.is_ML_conv()
+        elif k_or_nk == "NK": return self.is_ML_nonconv()
+        else:
+            print("Only allowed types to check are K for conventional or NK for nonconventional")
+
+    def calculate_ML_characteristic(self):
+        if not self.prev_exon or not self.next_exon:
+            return
+        self.ML_characteristic = compute_intron_characteristics(self).reshape(1, -1)
 
     def add_manual_annotation(self, man_annotation, start, end):
         self.man_annotation = man_annotation
@@ -660,6 +643,11 @@ class Intron(GenomicSequence):
                 self.test_annotation = 'intron_NK'
             else:
                 self.test_annotation = 'intron_NN'
+    def is_man_K(self):
+        return self.man_annotation == 'intron_K'
+    
+    def is_man_NK(self):
+        return self.man_annotation == 'intron_NK'
 
 
 class Exon(GenomicSequence):
@@ -671,6 +659,10 @@ class Exon(GenomicSequence):
         self.next_exon = next_exon
         self.prev_intron = prev_intron
         self.next_intron = next_intron
+
+    def merge_exons(self, next_exon):
+        self.sequence += next_exon.sequence
+        self.scaffold_end = next_exon.scaffold_end
 
 
 class Transcript():
@@ -695,23 +687,95 @@ def process_file(file_path):
         raise exc
 
 
-def create(genome, genes, genes_data_type):
-    valid_data_type = {'stringtie', 'gmap', 'manual'}
+def create(genome_path, genes_gff_path, genes_data_type):
+    valid_data_type = {'stringtie', 'gmap'}
     if genes_data_type not in valid_data_type:
         raise ValueError("read_genes: data_type must be one of {}.".format(valid_data_type))
-    genome_eug = read_genome(genome)
-    genes_eug = read_genes(genes, genes_data_type)
-    for name, gene in list(genes_eug.items()):
-        gene.add_exons()
-        gene.extract_sequence(genome_eug)
+    genome = read_genome(genome_path, 'fasta')
+    genes = read_genes(genes_gff_path, genes_data_type)
+    for _, gene in list(genes.items()):
+        gene.add_exons(genes_data_type)
+        gene.extract_sequence(genome)
         gene.create_introns()
-    return genome_eug, genes_eug
+    predict_all_introns(genes)
+    return genome, genes
 
 
-def read_genome(file_path):
+def create_manual(genbank_path):
+    """
+    Returns genes and genome objects.
+    :param genbank_path: [
+    :return: two dictionaries, genes = {} and genome = {gene_name:scaffold_seq}
+    """
+    label_dict = create_label_dict()
+    genes = {}
+    genome = defaultdict(str)
+    with open(genbank_path) as f:
+        for record in SeqIO.parse(f, "genbank"):
+            gene_name, gene = record.name, None
+            list_of_exons = []
+            gene_start, gene_end = 1000000, 0
+            sequence = str(record.seq)
+            genome[gene_name] = sequence
+            for feature in record.features:
+                start, end = int(feature.location.start.position), int(feature.location.end.position)
+                if feature.type == 'exon':
+                    if start < gene_start:
+                        gene_start = start
+                    if end > gene_end:
+                        gene_end = end
+                    exon = Exon(gene_name, start, end, strand='+', gene=None)
+                    list_of_exons.append(exon)
+            gene = Gene(gene_name, gene_start, gene_end, name=gene_name, strand='+', exons=[])
+            for exon in list_of_exons:
+                exon.gene = gene
+            gene.working_exons = list_of_exons
+            gene.add_exons('manual')
+            gene.extract_sequence(genome)
+            try:
+                gene.create_introns()
+            except Exception as exc:
+                print(gene_name)
+                print(gene)
+                raise exc
+            for feature_listed in record.features:
+                start, end = int(feature_listed.location.start.position), int(feature_listed.location.end.position)
+                if 'label' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['label'][0]
+                elif 'standard_name' in feature_listed.qualifiers.keys():
+                    label = feature_listed.qualifiers['standard_name'][0]
+                else:
+                    label = ''
+                if label in label_dict.keys():
+                    label = label_dict[label]
+                    try:
+                        intron_obj = gene.introns_dict[(start, end)]
+                    except KeyError:
+                        continue
+                    intron_obj.add_manual_annotation(label, start, end)
+            genes[gene_name] = gene
+        predict_all_introns(genes)
+    return genes, genome
+
+
+def create_label_dict():
+    k_labels = ['Intron K', 'Inron K', 'Intron K (EL, EG)', 'Intron K ', 'Exon K', "Intron K (5' partial)"]
+    nk_labels = ['Intron N', 'Intron N (EH)', 'Intron NK', 'Intron NK ', 'Intron N ', 'Intron NK (polimorfizm)']
+    i_labels = ['Intron I', 'Intron I ', 'I', 'Intron P']
+    label_dict = {}
+    for i in k_labels:
+        label_dict[i] = 'intron_K'
+    for i in nk_labels:
+        label_dict[i] = 'intron_NK'
+    for i in i_labels:
+        label_dict[i] = 'intron_I'
+    return label_dict
+
+
+def read_genome(file_path, file_type):
     genome = defaultdict(str)
     with open(file_path) as f:
-        for record in SeqIO.parse(f, 'fasta'):
+        for record in SeqIO.parse(f, file_type):
             genome[record.id] = str(record.seq)
     return genome
 
@@ -723,8 +787,6 @@ def read_genes(filename, data_type):
         return read_genes_gmap(filename)
     elif data_type == 'manual':
         return read_genes_manual(filename)
-    else:
-        print("No datatype specified")
 
 
 def read_genes_stringtie(filename):
@@ -776,6 +838,8 @@ def read_genes_gmap(filename):
 def read_genes_manual(filename):
     genes = {}  # slownik genow
     gene, exon = None, None
+    exons = []
+    prev = None
     for line in process_file(filename):
         if len(line) < 3:
             print(line)
@@ -786,11 +850,14 @@ def read_genes_manual(filename):
                 gene_name = line[8]
                 gene = Gene(line[0], line[3] - 1, line[4], name=gene_name, strand=line[6], exons=[])
                 genes[gene_name] = gene
+            else:
+                gene = None
         elif line[2] == 'exon':
             if line[6] in {"-", "+"}:
                 exon = Exon(line[0], line[3] - 1, line[4], strand=line[6], gene=gene)
                 gene.working_exons.append(exon)
     return genes
+
 
 
 def complement(seq):
@@ -804,10 +871,7 @@ def reverse_complement(seq):
 
 
 def complimentary(n1, n2):
-    if {n1, n2} in [{'A', 'T'}, {'C', 'G'}, {'G', 'T'}]:
-        return True
-    else:
-        return False
+    return {n1, n2} in [{'A', 'T'}, {'C', 'G'}, {'G', 'T'}]
 
 
 def calculate_pairing(str1, str2):
@@ -828,3 +892,182 @@ def calculate_pyrimidine_content(seq):
             count += 1
     return count/len(seq)
 
+
+def compute_intron_characteristics(seq):#prev_exon_seq, intron_seq, next_exon_seq):
+    if type(seq)==str:
+        prev_exon_seq = seq[:5]
+        intron_seq = seq[5:-5]
+        next_exon_seq = seq[-5:]
+    else: # type(seq)==Intron
+        prev_exon_seq = seq.prev_exon.sequence[-5:]
+        intron_seq = seq.sequence
+        next_exon_seq = seq.next_exon.sequence[:5]
+        seq = prev_exon_seq + intron_seq + next_exon_seq
+    baseY = {'C', 'T'}
+    baseR = {'A', 'G'}
+
+    e_y_cnt, i_r_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt = 0, 0, 0, 0, 0
+
+    if len(prev_exon_seq)<1: return False
+    if prev_exon_seq[-1] in baseY: e_y_cnt = 1
+    if intron_seq[0] in baseR: i_r_cnt = 1
+    if intron_seq[3:6]=="CAG" and intron_seq[-8:-5]=="CTG": i_CAG_cnt = 1
+    if intron_seq[-1] in baseY: i_y_cnt = 1
+    if next_exon_seq[0] in baseR: e_r_cnt = 1
+    pl2, pl1, pl3 = intron_pairing_score(seq, whether_weighted_scores = True)[:3]
+    return np.array([e_y_cnt, i_r_cnt, i_CAG_cnt, i_y_cnt, e_r_cnt, pl2, pl1, pl3])
+
+def intron_pairing_score(sequence, whether_weighted_scores = False):
+    def pairing_length(s, start=0, end=-1):
+        n = len(s[start:end])/2
+        x, y = start, end
+        best_pairing_length = 0.
+        pairing_length = 0.
+        total_pairings = 0.
+        while x<=20:
+            if total_pairings > 20: print("x =", x, total_pairings)
+            if complimentary(s[x], s[y]):
+                #print(s[x], s[y], introns.weigh_pairings(s[x], s[y]))
+                pairing_length += 1. if whether_weighted_scores==False else weigh_pairings(s[x], s[y])
+                total_pairings += 1. if whether_weighted_scores==False else weigh_pairings(s[x], s[y])
+            else: #if the pair is not complementary
+                best_pairing_length = max(best_pairing_length, pairing_length)
+                pairing_length = 0.
+            #przesuniecie do nastepnej pary
+            x += 1
+            y -= 1
+        best_pairing_length = max(best_pairing_length, pairing_length)
+        if whether_weighted_scores == True:
+            best_pairing_length, total_pairings = best_pairing_length, total_pairings
+        return best_pairing_length, total_pairings
+    
+    pl2, tp2 = pairing_length(sequence, 0, -3) #przesuniecie o 2
+    pl1, tp1 = pairing_length(sequence, 0, -2) #przesuniecie o 1
+    pl3, tp3 = pairing_length(sequence, 0, -4) #przesuniecie o 3
+    return [pl2, pl1, pl3, tp2, tp1, tp3]
+
+def predict_all_introns(genes):
+    print("Predicting ML classes for introns")
+    introns_to_assess, their_characteristics = [], []
+    for _, gene in list(genes.items()):
+        for intron in gene.introns:
+            introns_to_assess.append(intron)
+            their_characteristics.append(compute_intron_characteristics(intron))
+            for var in intron.variations:
+                introns_to_assess.append(var)
+                their_characteristics.append(compute_intron_characteristics(var))
+    print(len(introns_to_assess), len(their_characteristics))
+    print("Finished predicting ML classes for introns!")
+    assert len(their_characteristics) > 0
+    
+    predictions_conv = conventional_model.predict(their_characteristics)
+    predictions_nonconv = nonconventional_model.predict(their_characteristics)
+    probas_conv = conventional_model.predict_proba(their_characteristics)
+    probas_nonconv = nonconventional_model.predict_proba(their_characteristics)
+    #@TODO tu jest coś nie tak, gdzieś zwracane jest to samo dla obu model
+    
+    #probas = loaded_model.decision_function(their_characteristics)
+    for (i, pred_nc, pred_c, prob_c, prob_nc) in\
+        zip(introns_to_assess, predictions_nonconv, predictions_conv, probas_conv, probas_nonconv):
+        i.ML_nonconv_score = prob_nc[1]
+        i.ML_conv_score = prob_c[0]
+        i.ML_class = (pred_c, pred_nc)
+    #for intron in introns_to_assess:
+        var_probas_conv = [v.ML_conv_score for v in i.variations]
+        var_probas_nonconv = [v.ML_nonconv_score for v in i.variations]
+        i.ML_best_conv_version = i.variations[np.argmin(var_probas_conv)] if len(var_probas_conv) else i
+        i.ML_best_nonconv_version = i.variations[np.argmax(var_probas_nonconv)] if len(var_probas_nonconv) else i
+    return
+
+'''
+if np.all(self.ML_characteristic == 0):
+            self.calculate_ML_characteristic()
+        result_K = conventional_model.predict(self.ML_characteristic)[0]
+        score_K = conventional_model.predict_proba(self.ML_characteristic)[0][1]
+        result_NK = nonconventional_model.predict(self.ML_characteristic)[0]
+        score_NK = nonconventional_model.predict_proba(self.ML_characteristic)[0][1]
+
+        self.ML_class = [result_K, result_NK]
+        self.ML_conv_score = score_K
+        self.ML_nonconv_score = score_NK
+        # if result_K == 1:
+        #     self.ML_is_nonconventional = True
+        # self.ML_nonconv_proba = proba
+        # self.ML_best_conv_version = self
+        # self.ML_best_nonconv_version = self
+        for var in self.variations:
+            var.check_ML()
+        # for var in self.variations:
+        #     c, p = var.check_ML()
+        #     if p > self.ML_best_nonconv_version.ML_nonconv_proba:
+        #         self.ML_best_nonconv_version = var
+        #     if p < self.ML_best_conv_version.ML_nonconv_proba:
+        #         self.ML_best_conv_version = var
+        # if var_probas:
+        #    if np.max(var_probas) > self.
+        #    best_conv_v_ind, best_nonconv_v_ind = np.argmin(var_probas), np.argmax(var_probas)
+        #    print(len(var_probas), (best_conv_v_ind, best_nonconv_v_ind))
+        #    self.ML_best_conv_version = self.variations[best_conv_v_ind]
+        #    self.ML_best_nonconv_version = self.variations[best_nonconv_v_ind]
+        # return result, proba
+        # '''
+
+def weigh_pairings(nn1, nn2):
+    nn = nn1+nn2
+    if nn in ["AT", "TA"]: return 0.5
+    elif nn in ["GC", "CG"]: return 1
+    elif nn in ["GT", "TG"]: return 0.375
+    else: return 0
+
+def get_introns_demulti(genes):
+    """
+    Get lists of conventional and nonconventional introns without repetitions
+    from manual annotations.
+
+    Args:
+        genes (_type_): _description_
+
+    Returns:
+        introns_K_demulti (_type_): a list of unique conventional introns
+        introns_NK_demulti (_type_): a list of unique nonconventional introns
+    """
+    introns_NK, introns_K, introns_I = [], [], []
+
+    for _, gene_obj in genes.items():
+        for intron in gene_obj.introns:
+            if intron.man_annotation == 'intron_NK':
+                introns_NK.append(intron)
+            if intron.man_annotation == 'intron_K':
+                introns_K.append(intron)
+            if intron.man_annotation == 'intron_I':
+                introns_I.append(intron)
+    print('Intron_K', len(introns_K))
+    print('Intron_NK', len(introns_NK))
+    print('intron_I', len(introns_I))
+    
+    def demultiply_group(introns_X):
+        introns_X_demulti = []
+        single, double = [], {}
+        for intron in introns_X:
+            if intron.sequence in single:
+                for i in range(len(single)):
+                    if intron.sequence == single[i]:
+                        name_1, name_2 = str(introns_X_demulti[i]), str(intron)
+                        pos_1, pos_2 = name_1.split()[1:], name_2.split()[1:]
+                        if pos_1 != pos_2:
+                            if name_1 not in double.keys():
+                                double[name_1] = [name_1, name_2]
+                            else:
+                                double[name_1].append(name_2)
+            else:
+                single.append(intron.sequence)
+                introns_X_demulti.append(intron)
+        return introns_X_demulti
+    
+    introns_K_demulti = demultiply_group(introns_K)
+    introns_NK_demulti = demultiply_group(introns_NK)
+                
+    print('introns_K_demulti', len(introns_K_demulti))
+    print('introns_NK_demulti', len(introns_NK_demulti))
+
+    return introns_K_demulti, introns_NK_demulti
