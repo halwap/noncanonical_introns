@@ -859,7 +859,6 @@ def read_genes_manual(filename):
     return genes
 
 
-
 def complement(seq):
     complement_dict = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N', '-': '-'}
     letters = [complement_dict[base] for base in seq]
@@ -946,6 +945,7 @@ def intron_pairing_score(sequence, whether_weighted_scores = False):
     pl3, tp3 = pairing_length(sequence, 0, -4) #przesuniecie o 3
     return [pl2, pl1, pl3, tp2, tp1, tp3]
 
+# as for 17/11/22 no longer in use
 def predict_all_introns(genes):
     print("Predicting ML classes for introns")
     introns_to_assess, their_characteristics = [], []
