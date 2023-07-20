@@ -5,9 +5,8 @@ from re import search
 import pickle
 import numpy as np
 
-ncfile = open('./files_for_classifiers/28_04_NK_model.sav', 'rb')
-nonconventional_model = pickle.load(ncfile)
-conventional_model = pickle.load(open('./files_for_classifiers/28_04_K_model.sav', 'rb'))
+nonconventional_model = pickle.load(open('29_11_K_model.sav', 'rb'))
+conventional_model = pickle.load(open('29_11_NK_model.sav', 'rb'))
 #nonconventional_model = pickle.load(open('./files_for_classifiers/29_11_NK_model.sav', 'rb'))
 #conventional_model = pickle.load(open('./files_for_classifiers/29_11_K_model.sav', 'rb'))
 #nonconventional_model = pickle.load(open('./files_for_classifiers/15_11_NK_model.sav', 'rb'))
