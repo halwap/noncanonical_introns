@@ -1,0 +1,2 @@
+bugtest, /home/semik/projekty/noncanonical_introns/introny_fasty/bugtest.fasta, /home/semik/projekty/noncanonical_introns/introny_fasty/bugtest.gtf
+old_stringtie, /mnt/archive/euglena_genomy/analizy_longa/Elonga_rnascaf.fasta, /mnt/archive/euglena_genomy/analizy_longa/longa_old_stringtie.gtf

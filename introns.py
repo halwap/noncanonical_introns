@@ -1,5 +1,9 @@
 from collections import defaultdict
 from copy import copy
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 
 def getter_setter_gen(name, type_):
@@ -65,6 +69,14 @@ class Gene(GenomicSequence):
     
     def append_introns(self, intron):
         self.introns.append(intron)
+    
+    def create_intron_structures(self, path_working="./ViennaRNA-2.4.18/working_fastas/", path_RNAfold = '/usr/local/bin/'):
+        
+        p=plik.split('/')[-1].split('.')[0]
+        command = [path_RNAfold+'RNAfold', '--noPS',  '--command=constr.txt', '-j8', '-i', path_working+p+'.fasta']
+        with open(path_working+p+'.dbn', 'w') as output_file:
+            _p = subprocess.run(command, stdout=output_file)
+        
     
     def extract_sequence(self, genome):
         # elif self.strand == '-':
@@ -172,6 +184,9 @@ class Gene(GenomicSequence):
                 start = exon.scaffold_end
         for intron in self.introns:
             intron.movable_boundary_no_margins()
+            intron.conventional_version()
+            intron.nonconventional_version()
+            intron.noncanonical_structural_versions()# za wolno działa albo nie umiem
         
         # for intron in self.introns:
         #     if self.strand == '-':
@@ -225,6 +240,10 @@ class Intron(GenomicSequence):
     variations = list
     is_conventional = int
     is_nonconventional = int
+    variations_struct_1 = int
+    variations_struct_2 = int
+    is_struct_nonconv_1 = int
+    is_struct_nonconv_2 = int
 
     def __init__(self, scaffold_name, scaffold_start, scaffold_end, sequence=None, strand=None, gene=None, support=None, margin_left=0,
                  margin_right=0, margin_left_seq='', margin_right_seq='', prev_exon=None, next_exon=None):
@@ -242,6 +261,12 @@ class Intron(GenomicSequence):
         self.next_exon = next_exon
         self.best_conv_var=0 #variation of the intron with the best conventional version
         self.best_nonconv_var=0 #variation of the intron with the best nonconventional version
+        self.best_conv_obj = None
+        self.best_nonconv_obj = None
+        self.variations_struct_1 = None
+        self.variations_struct_2 = None
+        self.is_struct_nonconv_1 = None
+        self.is_struct_nonconv_2 = None
         # TODO przy zmienianiu podstawowego intronu trzeba przepisac best_(non)conv_var i liste wariacji - warianty ich nie maja i zawsze maja nie miec
         
         if self.strand=='-':
@@ -417,12 +442,8 @@ class Intron(GenomicSequence):
                     if son.check_nonconventional():
                         return True
             return False
-            
-    def conventional_version(self):
-        def rate(wersja):
-            wagi={0:0, 1:1, 2:3, 3:5, 4:7, 5:2, 6:4, 7:6, 8:8}
-            return wagi.get(wersja)
         
+    def conventional_version(self):
         if self.sequence[0:2] in ['GT', 'GC'] and self.sequence[-2:] == 'AG':
             i = 4
         else:
@@ -457,12 +478,14 @@ class Intron(GenomicSequence):
         #     self.is_conventional = i
 
         self.best_conv_var = self.is_conventional
+        self.best_conv_obj = self
         if not self.variations:
             return
         for var in self.variations:
             var.conventional_version()
-            if (var.is_conventional and rate(var.is_conventional)<rate(self.best_conv_var)) or (var.is_conventional and self.best_conv_var==0):
+            if (var.is_conventional and conventional_class_rate(var.is_conventional)<conventional_class_rate(self.best_conv_var)) or (var.is_conventional and self.best_conv_var==0):
                 self.best_conv_var = var.is_conventional
+                self.best_conv_obj = var
         
 
     def nonconventional_version(self):
@@ -485,30 +508,32 @@ class Intron(GenomicSequence):
         else: prev=None
         i=0
         
-        if complimentary(seq[3],seq[-6]) and complimentary(seq[4],seq[-7]):
-            i=11
-            if complimentary(seq[5], seq[-8]): #10
-                i=10
-                if seq[4]=='A' and seq[-7]=='T': #9
-                    i=9
-                    if seq[3]=="C" and seq[-6]=='G': #8
-                        i=8
-                        if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]): #7/6
-                            i = (isR(nex[0]) and 7) or (nex[2]=='C' and 6)
-                            if isR(nex[0]) and nex[2]=='C': #3
-                                i=3
-                                if seq[5]=='G' and seq[-8]=='C': #2
-                                    i=2
-                                    if nex[1]=='A': #1
-                                        i=1        
-                        elif nex and isR(seq[0]) and isR(nex[0]) and nex[2]=='C': #5,4
-                            if prev and isY(prev):
-                                i=5
-                            elif isY(seq[-1]):
-                                i=4
+#        if complimentary(seq[3],seq[-6]) and complimentary(seq[4],seq[-7]):
+#            i=11
+#            if complimentary(seq[5], seq[-8]): #10
+#                i=10
+        if complimentary(seq[3],seq[-6]) and complimentary(seq[5],seq[-8]) and seq[4]=='A' and seq[-7]=='T': #9
+            i=9
+            if seq[3]=="C" and seq[-6]=='G': #8
+                i=8
+                if prev and nex and isY(prev) and isR(seq[0]) and isY(seq[-1]): #7/6
+                    i = (isR(nex[0]) and 7) or (nex[2]=='C' and 6)
+                    if isR(nex[0]) and nex[2]=='C': #3
+                        i=3
+                        if seq[5]=='G' and seq[-8]=='C': #2
+                            i=2
+                            if nex[1]=='A': #1
+                                i=1        
+                elif nex and isR(seq[0]) and isR(nex[0]) and nex[2]=='C': #5,4
+                    if prev and isY(prev):
+                        i=5
+                    elif isY(seq[-1]):
+                        i=4
                                 
         self.is_nonconventional = i
         self.best_nonconv_var=self.is_nonconventional
+        self.best_nonconv_obj = self
+        
         if not self.variations:
             return
         
@@ -516,6 +541,30 @@ class Intron(GenomicSequence):
             var.nonconventional_version()
             if (var.is_nonconventional and var.is_nonconventional<self.best_nonconv_var) or (var.is_nonconventional and self.best_nonconv_var==0):
                 self.best_nonconv_var = var.is_nonconventional
+                self.best_nonconv_obj = var
+    
+    def noncanonical_structural_versions(self):
+        s = self.sequence
+        seq = self.prev_exon.sequence[-5:].lower() + s[:25]+'AAAAAAAAAA'+s[-25:] + self.next_exon.sequence[:5].lower()
+        with open('seq_RNAfold.fasta', 'w') as f:
+            f.write(">intron\n"+seq)
+        #print(len(s), seq)
+        stream = os.popen('RNAfold --noPS --auto-id --command=constr.txt < seq_RNAfold.fasta')
+        output = stream.readlines()[2].split()[0]
+
+        self.is_struct_nonconv_1, self.is_struct_nonconv_2 = False, False
+        if not '(' in output[-25:] and not ')' in output[:25]:
+            if output.count('(', 0, 25)>5:
+                self.is_struct_nonconv_2 = True
+                if self.next_exon.sequence[0] in ["G", "A"]:
+                    self.is_struct_nonconv_1 = True
+
+        for variation in self.variations:
+            variation.noncanonical_structural_versions()
+
+        if self.variations:
+            self.variations_struct_1=sum([var.is_struct_nonconv_1 for var in self.variations])
+            self.variations_struct_2=sum([var.is_struct_nonconv_2 for var in self.variations])
         
 
 class Exon(GenomicSequence):
@@ -595,3 +644,122 @@ def complimentary(n1, n2):
         return True
     else:
         return False
+
+def conventional_class_rate(wersja):
+    wagi={0:0, 1:1, 2:3, 3:5, 4:7, 5:2, 6:4, 7:6, 8:8}
+    return wagi.get(wersja)
+
+def create_genes(genome,genes):
+    genome_eug = read_genome(genome)
+    genes_eug = read_genes(genes)
+    for name, gene in list(genes_eug.items()):
+        gene.extract_sequence(genome_eug)
+        gene.create_introns()
+    return genome_eug,genes_eug
+
+def liczenie_intronow(name, genome_eug,genes_eug, czy_fasta_gtf=False, czy_wykresy=False):
+    if czy_fasta_gtf==True:
+        genome,genes=create_genes(genome_eug, genes_eug)
+        genome_eug=genome
+        genes_eug=genes
+    conv_count=0
+    nconv_count=0
+    both_count=0
+    all_count=0
+    non_count=0
+    conventional_classes=[0,0,0,0,0,0,0,0]
+    nonconventional_classes=[0,0,0,0,0,0,0,0,0]
+
+    for genename, gene in list(genes_eug.items()):
+        for intron in gene.introns:
+            all_count+=1
+
+            if intron.best_nonconv_var and not intron.best_conv_var:
+                nonconventional_classes[intron.best_nonconv_var-1]+=1
+                nconv_count+=1
+            elif intron.best_conv_var and not intron.best_nonconv_var:
+                conventional_classes[intron.best_conv_var-1]+=1
+                conv_count+=1
+            elif intron.best_conv_var and intron.best_nonconv_var:
+                both_count+=1
+            else:
+                non_count+=1
+    print("\nKonwencjonalne: %d, niekonwencjonalne: %d, oba: %d inne: %d, wszystkie: %d" %(conv_count,nconv_count, both_count,non_count,all_count))
+    stats=[name, conventional_classes, nonconventional_classes, conv_count,nconv_count, both_count,non_count,all_count]
+    #if czy_wykresy:
+    #    wykresy_liczenia(stats)
+    return stats
+
+def wykresy_liczenia(stats, wykresy=("K"), tabele=True, save_wykresy=False):
+    if wykresy:
+        colors=[np.random.rand(3,) for i in range(len(stats))]
+        for i in wykresy:
+            if i not in ["K", "NK", "KNBN"]: print("Złe wartości wykresów")
+    counts, klasy = [], []
+    for stat in stats:
+        name, conventional_classes, nonconventional_classes, conv_count,nconv_count, both_count,non_count,all_count=stat
+        klasy.append([name,[i/all_count for i in conventional_classes],[i/all_count for i in nonconventional_classes]])
+        counts.append([name, conv_count/all_count,nconv_count/all_count, both_count/all_count,non_count/all_count,all_count])
+    #print(klasy, counts)
+    if save_wykresy:
+        print(counts)
+        print(klasy)
+        return
+    
+    if "K" in wykresy:
+        lista1=[i[1] for i in klasy]
+        data=[[j*100 for j in l] for l in lista1]
+        legenda=[i[0] for i in klasy]
+        X = np.arange(8)
+        fig = plt.figure(figsize=(10,7))
+        ax = fig.add_axes([0,0,1,1])
+        width = 1/(len(data)+1)
+        for r in range(len(data)):
+            ax.bar(X + width*r, data[r], color = colors[r], width = width)
+        ax.set_title('Klasy intronów konwencjonalnych')
+        ax.set_xlabel('Klasy konwencjonalne')
+        ax.set_ylabel('% intronów')
+        ax.set_xticks(X)
+        ax.set_xticklabels(('Klasa 1', 'Klasa 2', 'Klasa 3', 'Klasa 4', 'Klasa 5', 'Klasa 6', 'Klasa 7', 'Klasa 8'))
+        ax.legend(legenda)
+        if save_wykresy: plt.savefig("klasy_konwencjonalne.png")
+    
+    if "NK" in wykresy:
+        lista1=[i[2] for i in klasy]
+        data=[[j*100 for j in l] for l in lista1]
+        legenda=[i[0] for i in klasy]
+        Y = np.arange(9)
+        fig = plt.figure(figsize=(10,7))
+        ax = fig.add_axes([0,0,1,1])
+        width = 1/(len(data)+1)
+        for r in range(len(data)):
+            ax.bar(Y + width*r, data[r], color = colors[r], width = width)
+        ax.set_title('Klasy intronów niekonwencjonalnych')
+        ax.set_xlabel('Klasy niekonwencjonalne')
+        ax.set_ylabel('% intronów')
+        ax.set_xticks(Y)
+        ax.set_xticklabels(('Klasa 1', 'Klasa 2', 'Klasa 3', 'Klasa 4', 'Klasa 5', 'Klasa 6', 'Klasa 7', 'Klasa 8', 'Klasa 9'))
+        ax.legend(legenda)
+        if save_wykresy: plt.savefig("klasy_niekonwencjonalne.png")
+    
+    if "KNBN" in wykresy:
+        data=[[j*100 for j in l[1:-1]] for l in counts]
+        #print(data)
+        labels=[i[0] for i in counts]
+        Z = np.arange(4)
+        fig = plt.figure(figsize=(7,5))
+        ax = fig.add_axes([0,0,1,1])
+        width = 1/(len(data)+1)
+        for r in range(len(data)):
+            ax.bar(Z + width*r, data[r], color = colors[r], width = width)
+        ax.set_title('Ilości wszystkich intronów')
+        ax.set_xlabel('Przynależność do klas')
+        ax.set_ylabel('% intronów')
+        ax.set_xticks(Z)
+        ax.set_xticklabels(('Konwencjonalne','Niekonwencjonalne', 'Oba','Żadne'))
+        ax.legend(labels)
+    if tabele: print(tabulate(stats, headers=['nazwa', 'klasy konw.', 'klasy niekonw.', 'konwencjonalne', 'niekonwencjonalne', 'oba', 'żadne', "wszystkie"]))
+    
+    return
+    
+    

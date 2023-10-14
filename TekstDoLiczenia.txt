@@ -1,0 +1,6 @@
+bugtest, /home/semik/projekty/noncanonical_introns/introny_fasty/bugtest.fasta, /home/semik/projekty/noncanonical_introns/introny_fasty/bugtest.gtf
+old_stringtie, /mnt/archive/euglena_genomy/analizy_longa/Elonga_rnascaf.fasta, /mnt/archive/euglena_genomy/analizy_longa/longa_old_stringtie.gtf
+old_oriented, /mnt/archive/euglena_genomy/analizy_longa/Elonga_rnascaf.fasta, /mnt/archive/euglena_genomy/analizy_longa/longa_stringtie_oriented_old.gtf
+masurca_stringtie, /mnt/archive/euglena_genomy/analizy_longa/longa_masurca_rascaf.fa, /mnt/archive/euglena_genomy/analizy_longa/longa_mas_rascaf_stringtie.gtf
+masurca_oriented, /mnt/archive/euglena_genomy/analizy_longa/longa_masurca_rascaf.fa, /mnt/archive/euglena_genomy/analizy_longa/longa_stringtie_oriented_masurca.gtf
+pilon_stringtie, /mnt/archive/euglena_genomy/analizy_longa/longa_pilon.fasta, /mnt/archive/euglena_genomy/analizy_longa/longa_pilon_stringtie.gtf
