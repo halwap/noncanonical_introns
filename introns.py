@@ -649,9 +649,6 @@ class Gene(GenomicSequence):
         #For each intron, find the highest scored variant
         #Will hold each intron's best variant
         best_var: list[Intron] = []
-        #Will hold whether each entry in `best_var' is conventional,
-        #as determined by the score
-        best_var_is_conv: list[bool] = []
         
         
         for intron in self.introns:
@@ -676,18 +673,15 @@ class Gene(GenomicSequence):
             #The conventional score takes priority over the nonconventional one
             #in case of ties (exceedingly unlikely, since the scores are floats)
             if best_c_score >= best_nc_score:
-                is_conv = True
                 #Index of variant with absolute highest variant
                 best_index = best_c_index
             else:
-                is_conv = False
                 best_index = best_nc_index
             
             
             #Remember the best variant, and whether the conventional or
             #nonconventional score won
             best_var.append(intron if best_index == -1 else intron.variants[best_index])
-            best_var_is_conv.append(is_conv)
         
         
         #With each intron's best variant found, it's time to serialize the gene
@@ -698,119 +692,39 @@ class Gene(GenomicSequence):
         #End of gene, and last exon
         end = self.scaffold_end
         
-        #Get repeatedly used values for less typing
-        #Name of scaffold
-        scaff = self.scaffold_name
-        #Strand
-        strand = self.strand
-        #Name of gene
-        name = self.name
-        
         
         #Write gene feature
-        fd.write(
-            '\t'.join([
-                            scaff,                                 #Seqname
-                            '.',                                   #Source
-                            'gene',                                #Feature type
-                            str(start),                            #Start
-                            str(end),                              #End
-                            '.',                                   #Score
-                            strand,                                #Strand
-                            '.',                                   #Phase
-                            f"ID={name};Name={name}\n"             #Attributes
-                ]))
-        
-        #Write transcript feature
-        fd.write(
-            '\t'.join([
-                            scaff,                                 #Seqname
-                            '.',                                   #Source
-                            'mRNA',                                #Feature type
-                            str(start),                            #Start
-                            str(end),                              #End
-                            '.',                                   #Score
-                            strand,                                #Strand
-                            '.',                                   #Phase
-                            f"ID={name}.mrna;Name={name};Parent={name}\n"
-                ]))
+        self.emit_gff(fd, "gene", start, end)
+        self.emit_gff(fd, "mRNA", start, end)
         
         
         #Get start and end end position of each intron
         intron_pos = [ (i.scaffold_start+1, i.scaffold_end) for i in best_var ]
         
         #Write initial exon
-        fd.write(
-            '\t'.join([
-                            scaff,
-                            '.',
-                            "exon",
-                            str(start),
-                            str(intron_pos[0][0]-1),
-                            '.',
-                            strand,
-                            '.',
-                            f"ID={name}.mrna.exon1;Name={name};Parent={name}.mrna\n"
-                ]))
+        self.emit_gff(fd, "exon", start, intron_pos[0][0]-1, 1)
         
         #Write medial exons
         for n, ((prev_start, prev_end), (next_start, next_end)) \
         in enumerate(pairwise(intron_pos), 2):
-            fd.write(
-                '\t'.join([
-                                scaff,
-                                '.',
-                                "exon",
-                                str(prev_end+1),
-                                str(next_start-1),
-                                '.',
-                                strand,
-                                '.',
-                                f"ID={name}.mrna.exon{n};Name={name};Parent={name}.mrna\n"
-                    ]))
+            self.emit_gff(fd, "exon", prev_end+1, next_start-1, n)
         
         #Write terminal exon
         n = len(self.exons)
-        fd.write(
-            '\t'.join([
-                            scaff,
-                            '.',
-                            "exon",
-                            str(intron_pos[-1][1]+1),
-                            str(end),
-                            '.',
-                            strand,
-                            '.',
-                            f"ID={name}.mrna.exon{n};Name={name};Parent={name}.mrna\n"
-                ]))
+        self.emit_gff(fd, "exon", intron_pos[-1][1]+1, end, len(self.exons))
+        
         
         #Write introns
         for n in range(len(self.introns)):
-            #Is the given intron conventional or not
-            is_conv = "C" if best_var_is_conv[n] else "NC"
-            fd.write(
-                '\t'.join([
-                                scaff,
-                                '.',
-                                "intron",
-                                str(intron_pos[n][0]),
-                                str(intron_pos[n][1]),
-                                '.',
-                                strand,
-                                '.',
-                                f"ID={name}.mrna.intron{n+1}_{is_conv};Name={name};Parent={name}.mrna\n"
-                    ]))
-        
-        #TODO: add a function for serializing a feature in GFF format, and
-        #replace each fd.write() call above with a call to that
+            self.emit_gff(fd, "intron", intron_pos[n][0], intron_pos[n][1], n+1)
     
-
+    
     def single_exon_serialize(self, fd: TextIO):
         """
         Serializes a single-exon gene to GFF format.
         
         Parameters:
-        fd -- The file to serialize to. A file descriptor, not a filename!
+        fd  The file to serialize to. A file descriptor, not a filename!
         """
         
         #Check whether the exon's start & end match the gene's start and end
@@ -828,58 +742,58 @@ class Gene(GenomicSequence):
         #End of gene, and last exon
         end = self.scaffold_end
         
-        #Get repeatedly used values for less typing
-        #Name of scaffold
-        scaff = self.scaffold_name
-        #Strand
-        strand = self.strand
-        #Name of gene
-        name = self.name
+
+        #Write features
+        self.emit_gff(fd, "gene", start, end)
+        self.emit_gff(fd, "mRNA", start, end)
+        self.emit_gff(fd, "exon", start, end)
+    
+    
+    def emit_gff(self, fd: TextIO, type: str, start: int, end: int, nth: int=1):
+        """
+        Helper method for finalize_serialize() and single_exon_serialize();
+        emits a single line of GFF describing a gene/transcript/exon/intron.
+        
+        Parameters:
+        fd      TextIO  File to write to. A file descriptor, not a filename!
+        type    str     Type of feature: "gene", "mRNA", "exon" or "intron"
+        start   int     Start position
+        end     int     End position
+        nth     int     Ordinal number of exon/intron within gene
+        """
+        
+        #Check feature type
+        if type not in { "gene", "mRNA", "exon", "intron" }:
+            raise ValueError(f"Invalid feature type to serialize: {type}")
         
         
-        #Write gene feature
-        fd.write(
-            '\t'.join([
-                            scaff,                                 #Seqname
-                            '.',                                   #Source
-                            'gene',                                #Feature type
-                            str(start),                            #Start
-                            str(end),                              #End
-                            '.',                                   #Score
-                            strand,                                #Strand
-                            '.',                                   #Phase
-                            f"ID={name};Name={name}\n"             #Attributes
-                ]))
+        #Build attributes field
+        attr: str = f"Name={self.name};ID={self.name}"
         
-        #Write transcript feature
-        fd.write(
-            '\t'.join([
-                            scaff,                                 #Seqname
-                            '.',                                   #Source
-                            'mRNA',                                #Feature type
-                            str(start),                            #Start
-                            str(end),                              #End
-                            '.',                                   #Score
-                            strand,                                #Strand
-                            '.',                                   #Phase
-                            f"ID={name}.mrna;Name={name};Parent={name}\n"
-                ]))
+        #If this is a transcript, mark ID as such and set gene as parent
+        if type == "mRNA":
+            attr += f".mrna;Parent={self.name}"
+        #If this is an exon/intron, mark ID as such and set transcript as parent
+        elif type == "exon" or type == "intron":
+            attr += f".mrna.{type}{nth};Parent={self.name}.mrna"
         
         
-        #Write exon exon
-        fd.write(
-            '\t'.join([
-                            scaff,
-                            '.',
-                            "exon",
-                            str(start),
-                            str(end),
-                            '.',
-                            strand,
-                            '.',
-                            f"ID={name}.mrna.exon1;Name={name};Parent={name}.mrna\n"
-                ]))
+        #Build GFF record
+        record: str = '\t'.join([
+                self.scaffold_name,     #Scaffold
+                ".",                    #Source of feature
+                type,                   #Feature type
+                str(start),             #Start position
+                str(end),               #End position
+                ".",                    #Score
+                self.strand,             #Strand
+                ".",                    #Phase
+                attr                    #Attributes
+            ]) + '\n'
         
+        #Write to file
+        fd.write(record)
+
 
 
 
@@ -1205,15 +1119,11 @@ class Intron(GenomicSequence):
     
     def nonconventional_version(self):
         def isR(N):
-            if N in ["G","A"]:
-                return True
-            return False
-
+            return N=='G' or N=='A'
+        
         def isY(N):
-            if N in ["C", "T"]:
-                return True
-            return False
-
+            return N=='C' or N=='T'
+        
         seq=self.sequence
         if self.next_exon and self.next_exon.sequence:
             nex=self.next_exon.sequence[:3]

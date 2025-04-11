@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from introns import *
 from argparse import ArgumentParser
 from os.path import isfile
 
@@ -30,6 +29,12 @@ parser.add_argument("-c", "--conv",
 	help = "Conventional model to use instead of default")
 
 
+#Options
+parser.add_argument("-f", "--force",
+	help = "Force overwriting of OUTFILE, if it exists",
+	action = "store_true")
+
+
 args = parser.parse_args()
 
 
@@ -37,6 +42,7 @@ args = parser.parse_args()
 ################################################################################
 #	BODY
 ################################################################################
+from introns import *
 
 if __name__ == "__main__":
 	
@@ -46,6 +52,11 @@ if __name__ == "__main__":
 		if file is not None and not isfile(file):
 			print(f"File {file} does not exist")
 			exit()
+	
+	#Check that outfile does not exist, unless --force was passed
+	if not args.force and isfile(args.OUTFILE):
+		print(f"File {args.OUTFILE} already exists, use --force to overwrite")
+		exit()
 	
 	
 	#Reload models, if a specific model was passed
@@ -64,8 +75,8 @@ if __name__ == "__main__":
 	
 	
 	#Serialize all genes
-	#Open file for writing (append mode)
-	outfile = open(args.OUTFILE, 'a')
+	#Open file for writing
+	outfile = open(args.OUTFILE, 'w')
 	
 	for gene in genes.values():
 		gene.finalize_serialize(outfile)
