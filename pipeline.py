@@ -39,9 +39,9 @@ parser.add_argument("-C", "--force-conv-variants",
     help = "Unconditionally prefer variants with conventional splice sites",
     default = False, action = "store_true")
 
-parser.add_argument("-W", "--weighted-pairing-scores",
-    help = "Use weighted pairing scores in intron scoring",
-    default = True, action = "store_true")
+parser.add_argument("-U", "--unweighted-pairing-scores",
+    help = "Use unweighted pairing scores in intron scoring",
+    default = False, action = "store_true")
 
 parser.add_argument("-f", "--force",
     help = "Force overwriting of generated file(s) if they exist",
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     #Get score for all introns (& variants) of each gene
     #score_all_introns() automatically triggers new phases
     score_introns(genes, nonconv_model, conv_model, unif_score_from_ss=args.force_conv_variants,
-                  batch_size=args.batch_size, weighted=args.weighted_pairing_scores)
+                  batch_size=args.batch_size, weighted= not args.unweighted_pairing_scores)
     
     
     phase("Rectify introns")
