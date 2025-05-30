@@ -2,3 +2,5 @@ matplotlib
 tabulate
 Bio
 scikit-learn
+more_itertools
+gffpandas
