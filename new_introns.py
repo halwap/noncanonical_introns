@@ -412,10 +412,10 @@ class Gene(GenomicSequence):
         #The left and right boundaries of each medial exon were nudged independently, and so may
         #need to be reconciled
         for exon_idx, (left_intron, right_intron) in enumerate(pairwise(self.introns), 1):
-            assert left_intron < right_intron, \
-                f"{left_intron} & {right_intron} of {self} misordered"
-
-
+            if not left_intron < right_intron:
+                raise ValueError("Vanishing exon found, try increasing minimum exon length")
+            
+            
             #If the introns disagree on the exon between them, reconciliation is necessary
             if left_intron.next_exon != right_intron.prev_exon:
                 
@@ -1624,7 +1624,8 @@ def max_sum_of_run(iterable: Iterable[float|int]) -> float:
     return max_sum
 
 
-def score_introns(genes: list[Gene], nc_model, c_model, unif_by_ss: bool = False, batch: int = 0):
+def score_introns(genes: list[Gene], nc_model, c_model, *,
+                  unif_score_from_ss: bool = False, batch_size: int = 0, weighted: bool = True):
     """
     Calculate conventional & nonconventional structure compatibility scores for all introns
     (& variants) of the passed genes, using the supplied models.
@@ -1651,7 +1652,7 @@ def score_introns(genes: list[Gene], nc_model, c_model, unif_by_ss: bool = False
     #Compute traits for each intron
     phase("Score introns: compute traits")
     for intron in introns:
-        intron.add_traits()
+        intron.add_traits(weighted)
     
     
     #Retrieve ML traits and splice site
@@ -1670,18 +1671,18 @@ def score_introns(genes: list[Gene], nc_model, c_model, unif_by_ss: bool = False
     
     #Split introns' traits into batches of size `batch'
     #If `batch' is <= 0, the traits are all put into one big batch and effectively unbatched
-    for trait_batch in batched(ml_traits, batch if batch > 0 else len(ml_traits)):
-        #nonconv_model.predict_proba(trait_batch) returns a matrix with 2 columns, and `batch' rows
+    for batch in batched(ml_traits, batch_size if batch_size > 0 else len(ml_traits)):
+        #nonconv_model.predict_proba(batch) returns a matrix with 2 columns, and `batch_size' rows
         #Each row contains the conv & nonconv scores (first & second item, respectively), according
         #to the nonconv model
         #The nonconv scores are extracted into a vector (using [:,1]), and that vector is appended
         #to the overall nonconv score vector (with append())
-        nc_scores = append(nc_scores, nc_model.predict_proba(trait_batch)[:,1], 0)
+        nc_scores = append(nc_scores, nc_model.predict_proba(batch)[:,1])
     
     #Check number of nonconv scores
     assert len(introns) == len(nc_scores), \
         "Nonconv scoring went wrong"
-
+    
     
     #Conv scores
     phase("Score introns: conv scores")
@@ -1689,10 +1690,10 @@ def score_introns(genes: list[Gene], nc_model, c_model, unif_by_ss: bool = False
     c_scores: array = empty([0], dtype="float64")
     
     #Split traits into batches
-    for trait_batch in batched(ml_traits, batch if batch > 0 else len(ml_traits)):
+    for batch in batched(ml_traits, batch_size if batch_size > 0 else len(ml_traits)):
         #Just like in the previous for loop, except the overall conv score vector is appended to,
         #the conv model is used for prediction, and conv scores are extracted (with [:,0])
-        c_scores = append(c_scores, c_model.predict_proba(trait_batch)[:,0], 0)
+        c_scores = append(c_scores, c_model.predict_proba(batch)[:,0])
     
     #Check number of nonconv scores
     assert len(introns) == len(c_scores), \
@@ -1706,8 +1707,10 @@ def score_introns(genes: list[Gene], nc_model, c_model, unif_by_ss: bool = False
         intron.c_score  = float(c_score)
         intron.nc_score = float(nc_score)
         #Unfied score
-        intron.unif_score = 1.0 if unif_by_ss and intron.traits["ss_is_conv"] \
-                            else max(c_score, nc_score)
+        if unif_score_from_ss:
+            intron.unif_score = 1.0 if intron.traits["ss_is_conv"] else float(nc_score)
+        else:
+            intron.unif_score = float(max( c_score, nc_score ))
 
 
 
