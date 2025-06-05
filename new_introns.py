@@ -19,6 +19,9 @@ from time import time
 from sys import stderr
 #Statistics
 from statistics import mean
+#Enum support
+from enum import Enum
+
 
 #Third-party imports
 #FASTA deserialization
@@ -1229,7 +1232,40 @@ class Intron(GenomicSequence):
         self.traits["pair_5_8"] = len(self) >= 8 and (self[5], self[-8]) in PAIR_WEIGHTS
     
     
-    def get_ml_traits(self, pair_scores: bool = True) -> array:
+    class PairScoresReport(Enum):
+        """
+        Enum used to control how pairing scores should be reported by the following method, to be
+        used in intron scoring. Does not affect actual calculation of pairing scores, only how they
+        are used in intron scoring.
+        """
+        #All pairing scores are reported as-is; default behavior
+        KEEP_ALL = 0
+        #Pairing scores are all reported as 0.0
+        DROP_ALL = 1
+        #All three pairing scores are reported to be the value of the single highest pairing score
+        PROPAGATE_BEST = 2
+        #The single highest pairing score is reported as-is; the other two are reported as 0.0
+        #In case of ties, the precedence is pair_score_2 > pair_score_1 > pair_score_3
+        KEEP_BEST = 3
+
+        #Let's say the pairing scores were calculated to be:
+        #pair_score_1: 1.0, pair_score_2: 3.0, pair_score_3: 2.0
+        #
+        #For KEEP_ALL, they will be reported as follows:
+        #pair_score_1: 1.0, pair_score_2: 3.0, pair_score_3: 2.0
+        #
+        #For DROP_ALL, they will be reported as follows:
+        #pair_score_1: 0.0, pair_score_2: 0.0, pair_score_3: 0.0
+        #
+        #For PROPAGATE_BEST, they will be reported as follows:
+        #pair_score_1: 3.0, pair_score_2: 3.0, pair_score_3: 3.0
+        #
+        #For KEEP_BEST, they will be reported as follows:
+        #pair_score_1: 0.0, pair_score_2: 3.0, pair_score_3: 0.0
+    
+    
+    
+    def get_ml_traits(self, pair_scores: PairScoresReport = PairScoresReport.KEEP_ALL) -> array:
         """
         Retrieve intron traits relevant to ML predictions. These are, in order:
         1. Does the preceding exon end with a pyrimidine?
@@ -1242,6 +1278,7 @@ class Intron(GenomicSequence):
         8. Pairing score for configuration #3 (3' end juts out by 3 nucleotides)
         The first 5 traits are booleans encoded as float (1.0: True, 0.0: False),
         the latter 3 traits are floats.
+
         If `pair_scores' is False, the last three traits are forced to be 0.0, regardless of
         the actual pairing scores' values.
         """
@@ -1255,6 +1292,51 @@ class Intron(GenomicSequence):
             return array([0.0] * 8)
         
         
+        #Get the appropriate pairing score values to report
+        match pair_scores:
+            #Report all pairing scores as 0.0
+            case Intron.PairScoresReport.DROP_ALL:
+                ps1 = 0.0
+                ps2 = 0.0
+                ps3 = 0.0
+            
+            #Use best pairing score as all pairing scores
+            case Intron.PairScoresReport.PROPAGATE_BEST:
+                max_ps = max(self.traits["pair_score_1"],
+                             self.traits["pair_score_2"],
+                             self.traits["pair_score_3"])
+                ps1 = max_ps
+                ps2 = max_ps
+                ps3 = max_ps
+            
+            #Report best pairing score as-is, and the other ones as 0.0
+            case Intron.PairScoresReport.KEEP_BEST:
+                #Get best pairing score
+                max_ps = max(self.traits["pair_score_1"],
+                             self.traits["pair_score_2"],
+                             self.traits["pair_score_3"])
+                
+                #Report best pairing score, suppress other ones
+                if max_ps == self.traits["pair_score_2"]:
+                    ps1 = 0.0
+                    ps2 = max_ps
+                    ps3 = 0.0
+                elif max_ps == self.traits["pair_score_1"]:
+                    ps1 = max_ps
+                    ps2 = 0.0
+                    ps3 = 0.0
+                else:
+                    ps1 = 0.0
+                    ps2 = 0.0
+                    ps3 = max_ps
+
+            #By default, report all pairing scores as-is (KEEP_ALL)
+            case _:
+                ps1 = self.traits["pair_score_1"]
+                ps2 = self.traits["pair_score_2"]
+                ps3 = self.traits["pair_score_3"]
+        
+        
         #Extract the traits in the appropriate order, converting the bool traits to floats
         return array([
             self.traits["prev_exon_y"],
@@ -1262,9 +1344,9 @@ class Intron(GenomicSequence):
             self.traits["intron_cag"] and self.traits["intron_ctg"],
             self.traits["intron_y"],
             self.traits["next_exon_r"],
-            self.traits["pair_score_2"] if pair_scores else 0.0,
-            self.traits["pair_score_1"] if pair_scores else 0.0,
-            self.traits["pair_score_3"] if pair_scores else 0.0
+            ps2,
+            ps1,
+            ps3
         ])
     
     
@@ -1631,7 +1713,7 @@ def score_introns(genes: list[Gene], nc_model, c_model, *,
                   unif_score_from_ss: bool = False,
                   batch_size: int = 0,
                   weighted: bool = True,
-                  include_pair_scores: bool = True):
+                  pair_scores: Intron.PairScoresReport = Intron.PairScoresReport.KEEP_ALL):
     """
     Calculate conventional & nonconventional structure compatibility scores for all introns
     (& variants) of the passed genes, using the supplied models.
@@ -1648,9 +1730,9 @@ def score_introns(genes: list[Gene], nc_model, c_model, *,
     positive integer to `batch_size'. This value will be the size of the intron batches.
     
     `weighted' controls whether the introns' pairing scores are weighted or unweighted.
-    `include_pair_scores' controls whether the pairing scores are used in intron scoring.
-    The pairing scores are calculated regardless of the value `include_pair_scores' - the parameter
-    controls only whether or not the pairing scores are used in intron scoring.
+    `pair_scores' controls how the pairing scores are used in intron scoring.
+    The pairing scores are calculated regardless of the value `pair_scores' - the parameter
+    controls only how the pairing scores are used in intron scoring.
     """
     #Build list of introns to assess
     phase("Score introns: gather")
@@ -1673,7 +1755,7 @@ def score_introns(genes: list[Gene], nc_model, c_model, *,
     
     #Retrieve ML traits and splice site
     phase("Score introns: retrieve traits")
-    ml_traits: list[array] =  [ intron.get_ml_traits(include_pair_scores) for intron in introns ]
+    ml_traits: list[array] =  [ intron.get_ml_traits(pair_scores) for intron in introns ]
     
     #Check number of trait sets
     assert len(introns) == len(ml_traits), \

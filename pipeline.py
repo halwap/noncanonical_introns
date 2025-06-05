@@ -27,6 +27,16 @@ parser.add_argument("stats", metavar="STATS", nargs='?',
 
 
 #Options
+parser.add_argument("-n", "--nonconv", metavar="MODEL", required=True,
+    help = "Model for scoring nonconventionality")
+
+parser.add_argument("-c", "--conv", metavar="MODEL", required=True,
+    help = "Model for scoring conventionality")
+
+parser.add_argument("-f", "--force",
+    help = "Force overwriting of generated file(s) if they exist",
+    action = "store_true")
+
 parser.add_argument("-E", "--min-exon-len", metavar="LEN",
     help = "The shortest an exon can become as a result of intron shifting",
     default = 1, type = int)
@@ -43,19 +53,17 @@ parser.add_argument("-U", "--unweighted-pairing-scores",
     help = "Use unweighted pairing scores in intron scoring",
     default = False, action = "store_true")
 
-parser.add_argument("-I", "--ignore-pairing-scores",
-    help = "Ignore pairing scores during intron scoring",
-    default = False, action = "store_true")
+parser.add_argument("-P", "--pairing-scores-in-scoring", metavar="HOW",
+    help = "How to treat pairing scores during intron scoring",
+    default = Intron.PairScoresReport.KEEP_ALL.value, type = int)
 
-parser.add_argument("-f", "--force",
-    help = "Force overwriting of generated file(s) if they exist",
-    action = "store_true")
-
-parser.add_argument("-n", "--nonconv", metavar="MODEL", required=True,
-    help = "Model for scoring nonconventionality")
-
-parser.add_argument("-c", "--conv", metavar="MODEL", required=True,
-    help = "Model for scoring conventionality")
+parser.epilog = """
+Valid values of HOW are:
+0 - Take as-is,
+1 - Drop all,
+2 - Copy highest,
+3 - Drop all but highest
+"""
 
 
 args = parser.parse_args()
@@ -110,10 +118,10 @@ if __name__ == "__main__":
     #Get score for all introns (& variants) of each gene
     #score_all_introns() automatically triggers new phases
     score_introns(genes, nonconv_model, conv_model,
-                  unif_score_from_ss  = args.force_conv_variants,
-                  batch_size          = args.batch_size,
-                  weighted            = not args.unweighted_pairing_scores,
-                  include_pair_scores = not args.ignore_pairing_scores)
+                  unif_score_from_ss = args.force_conv_variants,
+                  batch_size         = args.batch_size,
+                  weighted           = not args.unweighted_pairing_scores,
+                  pair_scores        = Intron.PairScoresReport(args.pairing_scores_in_scoring))
     
     
     phase("Rectify introns")
