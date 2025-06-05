@@ -1123,7 +1123,7 @@ class Intron(GenomicSequence):
         
         
         
-        #Determine max pairing length
+        #Determine pairing scores
         #The intron's start and end (plus a few nucleotides from both exons) are examined to find
         #the best contiguous run of pairing nucleotides
         #This is done in 3 different configurations:
@@ -1160,19 +1160,20 @@ class Intron(GenomicSequence):
         #
         #
         #Separately for each configuration, runs of nucleotides which pair up (A-T, C-G, G-T) are
-        #found. Each run is scored, and the pairing score for the given configuration is the score
-        #of the highest-scoring run.
+        #found. Each run is scored, and the pairing score for a given configuration is the score of
+        #its highest-scoring run.
         #For unweighted pairing scores, the score of a run is simply its length.
         #For weighted scores, each pair of nucleotides is given a weight (C-G > A-T > G-T), and the
         #score of a run is the sum of the weights of its constituent nucleotides.
         
-        #Get sequences for the above described alignments
 
+        #Get sequences for the above described alignments
+        #
         #Sequence of intron forward, plus the last 5 nucleotides of previous exon
-        #The previous exon is padded with Ns if needed to ensure it is in fact 5 nucleotides
+        #The previous exon is padded with Ns, if needed, to ensure it is in fact 5 nucleotides
         #The intron is limited to be `pairing_len'-5 nucleotides, so that this whole sequence is
         #`pairing_len' long
-        #Limiting the sequence's length serves to apply `pairing_len''s length limit
+        #Limiting this sequence's length serves to apply `pairing_len''s length limit
         forward: str = prev_exon[-5:].rjust(5, 'N') + self[:pairing_len-5]
         #In the above illustrated example, this sequence would be
         #"AAGGTAGTCAGGCTAGTC..." (truncated to be `pairing_len' long)
@@ -1207,9 +1208,9 @@ class Intron(GenomicSequence):
         #weights_2: 0.0, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0,   1.0, 0.5, 1.0,   0.375, 0.0, 0.375...
         #weights_3: 0.0, 0.0, 1.0, 0.0, 0.5, 0.0, 1.0, 0.375, 0.0, 0.0, 0.375, 1.0,   1.0, 0.0, ...
         #if `weighted' is True, or
-        #weights_1: 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, ...
-        #weights_2: 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, ...
-        #weights_3: 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, ...
+        #weights_1: 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,   0.0, 0.0, 1.0,   1.0,   0.0, 0.0, ...
+        #weights_2: 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0,   1.0, 1.0, 1.0,   1.0,   0.0, 1.0, ...
+        #weights_3: 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0,   0.0, 0.0, 1.0,   1.0,   1.0, 0.0, ...
         #if `weighted' is False
         
         
@@ -1228,7 +1229,7 @@ class Intron(GenomicSequence):
         self.traits["pair_5_8"] = len(self) >= 8 and (self[5], self[-8]) in PAIR_WEIGHTS
     
     
-    def get_ml_traits(self) -> array:
+    def get_ml_traits(self, pair_scores: bool = True) -> array:
         """
         Retrieve intron traits relevant to ML predictions. These are, in order:
         1. Does the preceding exon end with a pyrimidine?
@@ -1241,6 +1242,8 @@ class Intron(GenomicSequence):
         8. Pairing score for configuration #3 (3' end juts out by 3 nucleotides)
         The first 5 traits are booleans encoded as float (1.0: True, 0.0: False),
         the latter 3 traits are floats.
+        If `pair_scores' is False, the last three traits are forced to be 0.0, regardless of
+        the actual pairing scores' values.
         """
         #Check that traits are actually present
         assert self.traits, \
@@ -1259,9 +1262,9 @@ class Intron(GenomicSequence):
             self.traits["intron_cag"] and self.traits["intron_ctg"],
             self.traits["intron_y"],
             self.traits["next_exon_r"],
-            self.traits["pair_score_2"],
-            self.traits["pair_score_1"],
-            self.traits["pair_score_3"]
+            self.traits["pair_score_2"] if pair_scores else 0.0,
+            self.traits["pair_score_1"] if pair_scores else 0.0,
+            self.traits["pair_score_3"] if pair_scores else 0.0
         ])
     
     
@@ -1625,16 +1628,29 @@ def max_sum_of_run(iterable: Iterable[float|int]) -> float:
 
 
 def score_introns(genes: list[Gene], nc_model, c_model, *,
-                  unif_score_from_ss: bool = False, batch_size: int = 0, weighted: bool = True):
+                  unif_score_from_ss: bool = False,
+                  batch_size: int = 0,
+                  weighted: bool = True,
+                  include_pair_scores: bool = True):
     """
     Calculate conventional & nonconventional structure compatibility scores for all introns
     (& variants) of the passed genes, using the supplied models.
+
     Each scored intron is given a conventionality score and a nonconventionality score, plus a
-    unified score, which is the higher score of the two. Additionally, if `unif_by_ss' is True,
-    the unified score is instead forced to be the max possible value for introns which have a
-    conventional splice site.
+    unified score, which is the higher score of the two.
+
+    Alternatively, if `unif_by_ss' is True, introns with conventional splice sites are instead
+    forced to have the maximum possible unified score, and introns without copy the unified score
+    from their nonconventional score.
+
     By default, all introns are scored at once, but if number of introns is very large, an OOM
-    error might occur. To remedy this, the introns can be made to 
+    error might occur. To remedy this, the introns can be processed in batches by passing a
+    positive integer to `batch_size'. This value will be the size of the intron batches.
+    
+    `weighted' controls whether the introns' pairing scores are weighted or unweighted.
+    `include_pair_scores' controls whether the pairing scores are used in intron scoring.
+    The pairing scores are calculated regardless of the value `include_pair_scores' - the parameter
+    controls only whether or not the pairing scores are used in intron scoring.
     """
     #Build list of introns to assess
     phase("Score introns: gather")
@@ -1657,7 +1673,7 @@ def score_introns(genes: list[Gene], nc_model, c_model, *,
     
     #Retrieve ML traits and splice site
     phase("Score introns: retrieve traits")
-    ml_traits: list[array] =  [ intron.get_ml_traits() for intron in introns ]
+    ml_traits: list[array] =  [ intron.get_ml_traits(include_pair_scores) for intron in introns ]
     
     #Check number of trait sets
     assert len(introns) == len(ml_traits), \

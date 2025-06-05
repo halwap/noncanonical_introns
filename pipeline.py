@@ -43,6 +43,10 @@ parser.add_argument("-U", "--unweighted-pairing-scores",
     help = "Use unweighted pairing scores in intron scoring",
     default = False, action = "store_true")
 
+parser.add_argument("-I", "--ignore-pairing-scores",
+    help = "Ignore pairing scores during intron scoring",
+    default = False, action = "store_true")
+
 parser.add_argument("-f", "--force",
     help = "Force overwriting of generated file(s) if they exist",
     action = "store_true")
@@ -105,8 +109,11 @@ if __name__ == "__main__":
     
     #Get score for all introns (& variants) of each gene
     #score_all_introns() automatically triggers new phases
-    score_introns(genes, nonconv_model, conv_model, unif_score_from_ss=args.force_conv_variants,
-                  batch_size=args.batch_size, weighted= not args.unweighted_pairing_scores)
+    score_introns(genes, nonconv_model, conv_model,
+                  unif_score_from_ss  = args.force_conv_variants,
+                  batch_size          = args.batch_size,
+                  weighted            = not args.unweighted_pairing_scores,
+                  include_pair_scores = not args.ignore_pairing_scores)
     
     
     phase("Rectify introns")
