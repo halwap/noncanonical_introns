@@ -4,15 +4,15 @@
 
 #Standard library 
 #Efficient lambdas
-from operator import itemgetter, attrgetter, not_
+from operator import attrgetter
 #Convenient iteration
 from itertools import pairwise, batched
 #Type hints
 from typing import *
 #Model deserialization
-import pickle
+from pickle import load
 #Diagnostics
-import warnings
+from warnings import filterwarnings
 #Phase duration timing
 from time import time
 #Stderr printing
@@ -35,7 +35,7 @@ from numpy import array, append, empty, argmax
 
 
 #Hide warnings
-warnings.filterwarnings("ignore", category=UserWarning)
+filterwarnings("ignore", category=UserWarning)
 
 
 
@@ -283,7 +283,7 @@ class Gene(GenomicSequence):
         #Push sequence to transcript
         if 't' in which:
             self.transcript.seq = ""
-            for exon in self.get_exons():
+            for exon in self.ordered_exons():
                 self.transcript.seq += maybe_rc(scaffold_seq[exon.start:exon.end])
         
         
@@ -303,15 +303,10 @@ class Gene(GenomicSequence):
                     f"{intron} in {self}: bad length, {len(intron)} vs {intron.end - intron.start}"
         
         
-        #Check if the transcript's sequence matches the exons
-        assert self.transcript.seq == concat_genseq(self.get_exons()), \
-            f"Seq of {self.transcript} differs from joint seq of constituent exons"
-        
-        #Check if the gene's sequence matches the exons & introns
-        assert self.seq == concat_genseq(self.get_exons_and_introns()), \
-            f"Seq of {self} differs from joint seq of constituent exons & introns"
-    
-    
+        #Check that all created sequences match
+        assert self.valid_seqs('i' in which), \
+            f"Seq of {self.transcript} differs from joint seq of constituent features"
+
     
     def add_introns(self):
         """
@@ -560,7 +555,7 @@ class Gene(GenomicSequence):
             intron.emit_gff(fd, "intron", attr)
     
     
-    def get_exons(self) -> Iterable['Exon']:
+    def ordered_exons(self) -> Iterable['Exon']:
         """
         Returns an iterable of exons, sorted by order within gene, not position
         """
@@ -572,7 +567,7 @@ class Gene(GenomicSequence):
         return reversed( self.exons ) if self.strand == '-' else self.exons
     
     
-    def get_exons_and_introns(self) -> Iterable[Union['Exon','Intron']]:
+    def ordered_exons_and_introns(self) -> Iterable[Union['Exon','Intron']]:
         """
         Returns an iterable of interspersed exons & introns, sorted by order within gene, not
         position
@@ -596,17 +591,15 @@ class Gene(GenomicSequence):
         By default only exons are checked; `introns_too' should be set to True to also check
         introns. Additionally, exons & introns are checked iff the gene has any.
         """
-        #If exons should be checked
-        if len(self.exons):
-            #Check exons are within bound of gene
-            if any( exon not in self for exon in self.exons ):
-                return False
-            #Check order and non-flushness of exons
-            if any( not l_exon < r_exon for l_exon, r_exon in pairwise(self.exons) ):
-                return False
+        #Check exons are within bound of gene
+        if any( exon not in self for exon in self.exons ):
+            return False
+        #Check order and non-flushness of exons
+        if any( not l_exon < r_exon for l_exon, r_exon in pairwise(self.exons) ):
+            return False
         
         #If intron should be checked
-        if introns_too and len(self.introns):
+        if introns_too:
             #Check introns are within bound of gene
             if any( intron not in self for intron in self.introns ):
                 return False
@@ -628,14 +621,12 @@ class Gene(GenomicSequence):
         """
         Check if the linkage of all the exons (and optionally, introns) of the gene are valid
         """
-        #If exons should be checked
-        if len(self.exons):
-            #Check that exons are mutually linked
-            if any( not l_exon @ r_exon for l_exon, r_exon in pairwise(self.exons) ):
-                return False
+        #Check that exons are mutually linked
+        if any( not l_exon @ r_exon for l_exon, r_exon in pairwise(self.exons) ):
+            return False
         
         #If intron should be checked
-        if introns_too and len(self.introns):
+        if introns_too:
             #Check linkage between each exon and its following intron
             if any( not exon @ intron for exon, intron in zip(self.exons, self.introns) ):
                 return False
@@ -645,6 +636,41 @@ class Gene(GenomicSequence):
         
         #If all relevant checks passed, the links are valid
         return True
+    
+    
+    def valid_seqs(self, introns_too: bool = False) -> bool:
+        """
+        Check if the exons' combined sequence matches the transcript's, and optionally, the exons
+        and introns' combined sequence matches the gene's
+        """
+        #Check that the transcript & exons all have sequences
+        if not self.transcript.seq:
+            return False
+        if any( not exon.seq for exon in self.exons ):
+            return False
+        
+        #Check if the transcript's sequence matches the exons
+        if self.transcript.seq != concat_genseq(self.ordered_exons()):
+            return False
+        
+        
+        #If intron should be checked
+        if introns_too:
+            #Check that the gene & introns all have sequences
+            if not self.seq:
+                return False
+            if any( not intron.seq for intron in self.intron ):
+                return False
+            
+
+            #Check if the gene's sequence matches the exons & introns
+            if self.seq != concat_genseq(self.ordered_exons_and_introns()):
+                return False
+        
+
+        #If all relevant checks passed, the sequences are valid
+        return True
+
 
 
 class Transcript(GenomicSequence):
@@ -1636,7 +1662,7 @@ def load_model(model: str):
     Load a pickled sklearn model from filename
     """
     with open(model, 'rb') as fd:
-        return pickle.load(fd)
+        return load(fd)
 
 
 
