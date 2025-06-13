@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from new_introns import *
+from libintrons import *
 from os.path import isfile
 
 ################################################################################
