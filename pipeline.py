@@ -96,6 +96,7 @@ if __name__ == "__main__":
     conv_model = load_model(args.conv)
     genome = deserialize_fasta(args.fasta)
     genes = deserialize_gff(args.gff)
+    genes = list(genes.values())
     
     
     phase("Link exons")

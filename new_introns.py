@@ -1508,7 +1508,7 @@ class Intron(GenomicSequence):
 #   DESERIALIZATION
 ###################################################################################################
 
-def deserialize_gff(gff: str) -> list[Gene]:
+def deserialize_gff(gff: str) -> dict[str:Gene]:
     def get_id_and_parent(attr: str) -> tuple[str, str]:
         """
         Given an attribute field, extract the "ID" and "Parent" fields, in that order.
@@ -1619,7 +1619,7 @@ def deserialize_gff(gff: str) -> list[Gene]:
     
     
     fd.close()
-    return list(genes.values())
+    return genes
 
 
 def deserialize_fasta(fasta: str) -> dict[str:str]:
