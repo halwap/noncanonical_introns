@@ -305,7 +305,7 @@ class Gene(GenomicSequence):
         
         #Check that all created sequences match
         assert self.valid_seqs('i' in which), \
-            f"Seq of {self.transcript} differs from joint seq of constituent features"
+            f"Seq of {self} differs from joint seq of constituent features"
 
     
     def add_introns(self):
@@ -659,7 +659,7 @@ class Gene(GenomicSequence):
             #Check that the gene & introns all have sequences
             if not self.seq:
                 return False
-            if any( not intron.seq for intron in self.intron ):
+            if any( not intron.seq for intron in self.introns ):
                 return False
             
 
@@ -1534,11 +1534,12 @@ class Intron(GenomicSequence):
 #   DESERIALIZATION
 ###################################################################################################
 
-def deserialize_gff(gff: str) -> dict[str:Gene]:
+def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
     def get_id_and_parent(attr: str) -> tuple[str, str]:
         """
         Given an attribute field, extract the "ID" and "Parent" fields, in that order.
         Returns an empty string if a given field is absent from the attribute field.
+        If `invert' is true, the strand field's value will be inverted for all processed records.
         """
         return attr.partition("ID=")[2].partition(';')[0], \
                attr.partition("Parent=")[2].partition(';')[0]
@@ -1578,6 +1579,11 @@ def deserialize_gff(gff: str) -> dict[str:Gene]:
         
         if strand not in '-+':
             continue
+        
+        
+        #Invert strand if requested
+        if invert:
+            strand = '-' if strand == '+' else '+'
         
         
         if ft == "gene":
@@ -1735,7 +1741,7 @@ def max_sum_of_run(iterable: Iterable[float|int]) -> float:
     return max_sum
 
 
-def score_introns(genes: list[Gene], nc_model, c_model, *,
+def score_introns(genes: Iterable[Gene], nc_model, c_model, *,
                   unif_score_from_ss: bool = False,
                   batch_size: int = 0,
                   weighted: bool = True,
