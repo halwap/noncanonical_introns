@@ -657,8 +657,8 @@ class Gene(GenomicSequence):
         if any( not exon.seq for exon in self.exons ):
             return False
         
-        #Check if the transcript's sequence matches the exons
-        if self.transcript.seq != concat_genseq(self.ordered_exons()):
+        #Check if the exons' combined seq matches the transcript's seq
+        if concat_genseq(self.ordered_exons()) not in self.transcript.seq:
             return False
         
         
@@ -671,8 +671,8 @@ class Gene(GenomicSequence):
                 return False
             
 
-            #Check if the gene's sequence matches the exons & introns
-            if self.seq != concat_genseq(self.ordered_exons_and_introns()):
+            #Check if the exons' & introns' combined seq matches the gene's seq
+            if concat_genseq(self.ordered_exons_and_introns()) not in self.seq:
                 return False
         
 
