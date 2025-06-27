@@ -481,9 +481,11 @@ class Gene(GenomicSequence):
         self.introns[intron_idx] = variant
     
     
-    def serialize(self, fd: TextIO):
+    def serialize(self, fd: TextIO, follow_so: bool = True):
         """
         Serialize a gene and all its children features (transcript, exons, introns) to a GFF file
+        If `follow_so' is False, introns' feature type fields will be "intron_C" or "intron_N"
+        instead of just "intron", depending on the splice site
         """
         #Validate coordinates
         assert self.valid_coords(True), \
@@ -552,7 +554,13 @@ class Gene(GenomicSequence):
             if intron.nc_score != None:
                 attr["nonconv_score"] = str(intron.nc_score)
             
-            intron.emit_gff(fd, "intron", attr)
+            #Get feature type to report
+            ft = "intron"
+            if not follow_so and intron.traits:
+                ft += "_C" if intron.traits["ss_is_conv"] else "_N"
+            
+            
+            intron.emit_gff(fd, ft, attr)
     
     
     def ordered_exons(self) -> Iterable['Exon']:
