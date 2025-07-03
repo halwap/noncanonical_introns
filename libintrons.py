@@ -45,6 +45,12 @@ filterwarnings("ignore", category=UserWarning)
 ###################################################################################################
 
 class GenomicSequence:
+    scaffold: str
+    start: int
+    end: int
+    seq: str|None
+    strand: Literal['+', '-', '.']|None
+
     def __init__(self, scaffold, start, end, seq=None, strand=None):
         self.scaffold = scaffold
         
@@ -211,6 +217,17 @@ class GenomicSequence:
 
 
 class Gene(GenomicSequence):
+    scaffold: str
+    start: int
+    end: int
+    seq: str|None
+    strand: Literal['+', '-', '.']|None
+
+    transcript: 'Transcript'
+    exons: list['Exon']
+    introns: list['Intron']
+    name: str
+
     def __init__(self, scaffold, start, end, seq='', strand='',
                  transcript=None, exons=None, introns=None, name=''):
         GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
@@ -682,12 +699,33 @@ class Gene(GenomicSequence):
 
 
 class Transcript(GenomicSequence):
+    scaffold: str
+    start: int
+    end: int
+    seq: str
+    strand: Literal['+', '-', '.']|None
+    
+    name: str
+
     def __init__(self, scaffold, start, end, seq='', strand='', name=''):
         GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
         self.name = name
 
 
 class Exon(GenomicSequence):
+    scaffold: str
+    start: int
+    end: int
+    seq: str|None
+    strand: Literal['+', '-', '.']|None
+
+    gene: Gene|None
+    prev_exon: 'Exon'|None
+    next_exon: 'Exon'|None
+    prev_intron: 'Intron'|None
+    next_intron: 'Intron'|None
+
+
     def __init__(self, scaffold, start, end, seq='', strand='',
                  gene=None, prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
         GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
@@ -812,6 +850,23 @@ class Intron(GenomicSequence):
         traits: dict[str:bool|float]
             Structural traits of the intron; empty if not yet computed
     """
+    scaffold: str
+    start: int
+    end: int
+    seq: str|None
+    strand: Literal['+', '-', '.']|None
+
+    gene: Gene|None
+    prev_exon: 'Exon'|None
+    next_exon: 'Exon'|None
+    variants: list['Intron']
+    c_score: float|None
+    nc_score: float|None
+    unif_score: float|None
+    splice_site: str|None
+    trais: dict[str:bool|float]
+
+
     def __init__(
                 self,
                 scaffold:  str,
