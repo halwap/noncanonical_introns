@@ -57,10 +57,6 @@ parser.add_argument("-P", "--pairing-scores-in-scoring", metavar="HOW",
     help = "How to treat pairing scores during intron scoring",
     default = Intron.PairScoresReport.KEEP_ALL.value, type = int)
 
-parser.add_argument("-S", "--mark-intron-type",
-    help = "Report each intron's type ('C' or 'N') in OUTFILE",
-    action = "store_true")
-
 parser.epilog = """
 Valid values of HOW are:
 0 - Take as-is,
@@ -147,7 +143,7 @@ if __name__ == "__main__":
     phase("Serialize")
     with open(args.outfile, 'w') as fd:
         for gene in genes:
-            gene.serialize(fd, not args.mark_intron_type)
+            gene.serialize(fd)
     
     
     if args.stats:

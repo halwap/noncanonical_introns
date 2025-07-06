@@ -28,10 +28,6 @@ parser.add_argument("-f", "--force",
     help = "Force overwriting of generated file(s) if they exist",
     action = "store_true")
 
-parser.add_argument("-S", "--mark-intron-type",
-    help = "Report each intron's type ('C' or 'N') in OUTFILE",
-    action = "store_true")
-
 
 args = parser.parse_args()
 
@@ -76,11 +72,10 @@ if __name__ == "__main__":
     for gene in genes:
         gene.add_seqs(genome)
     
-    if args.mark_intron_type:
-        phase("Compute traits")
-        for gene in genes:
-            for intron in gene.introns:
-                intron.add_traits()
+    phase("Compute traits")
+    for gene in genes:
+        for intron in gene.introns:
+            intron.add_traits()
     
     #Serialize all genes
     #Open file for writing
