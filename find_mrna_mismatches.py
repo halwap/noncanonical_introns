@@ -49,9 +49,8 @@ if __name__ == "__main__":
     
     
     #Check that all relevant input files exist
-    for file in [ args.gff, args.genome, args.xcripts ]:
-        if file and not isfile(file):
-            raise FileNotFoundError(f"File {file} does not exist")
+    require_files( [ args.gff, args.genome, args.xcripts ] )
+    
     
     #Will hold number of mismatches found
     mismatch_cnt: int = 0

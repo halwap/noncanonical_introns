@@ -2,7 +2,8 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from os.path import isfile, realpath, dirname
+from os.path import realpath, dirname
+from extras import *
 
 ################################################################################
 #   ARGUMENT PARSING
@@ -80,16 +81,11 @@ if __name__ == "__main__":
     
 
     #Check that all relevant input files exist
-    for file in [ args.gff, args.fasta, args.nonconv, args.conv ]:
-        if file and not isfile(file):
-            raise FileNotFoundError(f"File {file} does not exist")
-
+    require_files( [ args.gff, args.fasta, args.nonconv, args.conv ] )
     
     #If --force was not passed, exit early if output files exist
     if not args.force:
-        for file in [ args.stats, args.outfile ]:
-            if file and isfile(file):
-                raise FileExistsError(f"File {file} exists, use --force to overwrite")
+        refuse_files( [ args.stats, args.outfile ] )
     
     
     #Load genes, automatically creating introns with variants
@@ -143,14 +139,14 @@ if __name__ == "__main__":
     #Serialize all genes
     #Open file for writing
     phase("Serialize")
-    with open(args.outfile, 'w') as fd:
+    with wopen(args.outfile) as fd:
         for gene in genes:
             gene.serialize(fd)
     
     
     if args.stats:
         phase("Intron statistics")
-        with open(args.stats, 'w') as fd:
+        with wopen(args.stats) as fd:
             #TSV header
             fd.write(
                 '\t'.join([

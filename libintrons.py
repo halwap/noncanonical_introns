@@ -33,6 +33,7 @@ from more_itertools import roundrobin
 #Array processing
 from numpy import array, append, empty, argmax
 
+from extras import *
 
 #Hide warnings
 filterwarnings("ignore", category=UserWarning)
@@ -48,8 +49,8 @@ class GenomicSequence:
     scaffold: str
     start: int
     end: int
-    seq: str|None
-    strand: Literal['+', '-', '.']|None
+    seq: Optional[str]
+    strand: Optional[Literal['+', '-', '.']]
 
     def __init__(self, scaffold, start, end, seq=None, strand=None):
         self.scaffold = scaffold
@@ -177,7 +178,7 @@ class GenomicSequence:
     
     
     #Serialization
-    def emit_gff(self, fd: TextIO, ft: str, attr: dict[str:str]|None = None):
+    def emit_gff(self, fd: TextIO, ft: str, attr: Optional[dict[str:str]] = None):
         """Serialize a GenomicSequence object to file `fd'
         
         Params:
@@ -220,8 +221,8 @@ class Gene(GenomicSequence):
     scaffold: str
     start: int
     end: int
-    seq: str|None
-    strand: Literal['+', '-', '.']|None
+    seq: Optional[str]
+    strand: Optional[Literal['+', '-', '.']]
 
     transcript: 'Transcript'
     exons: list['Exon']
@@ -696,7 +697,7 @@ class Transcript(GenomicSequence):
     start: int
     end: int
     seq: str
-    strand: Literal['+', '-', '.']|None
+    strand: Optional[Literal['+', '-', '.']]
     
     name: str
 
@@ -709,14 +710,14 @@ class Exon(GenomicSequence):
     scaffold: str
     start: int
     end: int
-    seq: str|None
-    strand: Literal['+', '-', '.']|None
+    seq: Optional[str]
+    strand: Optional[Literal['+', '-', '.']]
 
-    gene: Gene|None
-    prev_exon: 'Exon'|None
-    next_exon: 'Exon'|None
-    prev_intron: 'Intron'|None
-    next_intron: 'Intron'|None
+    gene:        Optional[Gene]
+    prev_exon:   Optional['Exon']
+    next_exon:   Optional['Exon']
+    prev_intron: Optional['Intron']
+    next_intron: Optional['Intron']
 
 
     def __init__(self, scaffold, start, end, seq='', strand='',
@@ -820,25 +821,25 @@ class Intron(GenomicSequence):
             Coordinate of first nucleotide of intron within scaffold
         end: int
             Coordinate of last nucleotide of intron within scaffold
-        gene: Gene|None
+        gene: Optional[Gene]
             The gene this intron is a part of, if one was provided
-        prev_exon: Exon|None
+        prev_exon: Optional[Exon]
             The exon preceding the intron (by position in scaffold, not in-gene order), if provided
-        next_exon: Exon|None
+        next_exon: Optional[Exon]
             The exon following the intron (by position in scaffold, not in-gene order), if provided
-        strand: str|None
+        strand: Optional[str]
             Which strand (+ or -) the intron is located on, if it was provided
-        seq: str|None
+        seq: Optional[str]
             Nucleotide sequence of the intron, if one was provided
         variants: list[Intron]
             Variants (alt positions) of the intron; empty if it has none, or if not yet computed
-        c_score: float|None
+        c_score: Optional[float]
             Conventionality score of the intron, or None if not yet computed
-        nc_score: float|None
+        nc_score: Optional[float]
             Nonconventionality score of the intron, or None if not yet computed
-        unif_score: float|None
+        unif_score: Optional[float]
             Unified score of the intron, or None if not yet computed
-        splice_site: str|None
+        splice_site: Optional[str]
             The splice site of the intron, or None if not yet computed
         traits: dict[str:bool|float]
             Structural traits of the intron; empty if not yet computed
@@ -846,17 +847,17 @@ class Intron(GenomicSequence):
     scaffold: str
     start: int
     end: int
-    seq: str|None
-    strand: Literal['+', '-', '.']|None
+    seq: Optional[str]
+    strand: Optional[Literal['+', '-', '.']]
 
-    gene: Gene|None
-    prev_exon: 'Exon'|None
-    next_exon: 'Exon'|None
+    gene: Optional[Gene]
+    prev_exon: Optional['Exon']
+    next_exon: Optional['Exon']
     variants: list['Intron']
-    c_score: float|None
-    nc_score: float|None
-    unif_score: float|None
-    splice_site: str|None
+    c_score: Optional[float]
+    nc_score: Optional[float]
+    unif_score: Optional[float]
+    splice_site: Optional[str]
     trais: dict[str:bool|float]
 
 
@@ -865,11 +866,11 @@ class Intron(GenomicSequence):
                 scaffold:  str,
                 start:     int,
                 end:       int,
-                seq:       str|None  = None,
-                strand:    str|None  = None,
-                gene:      Gene|None = None,
-                prev_exon: Exon|None = None,
-                next_exon: Exon|None = None,
+                seq:       Optional[str]  = None,
+                strand:    Optional[str]  = None,
+                gene:      Optional[Gene] = None,
+                prev_exon: Optional[Exon] = None,
+                next_exon: Optional[Exon] = None,
             ):
         GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
         
@@ -878,7 +879,7 @@ class Intron(GenomicSequence):
         if gene:
             assert self in gene, \
                 f"{self} outside of {gene}"
-        self.gene: Gene|None = gene
+        self.gene: Optional[Gene] = gene
         
 
         #If preceeding exon was passed
@@ -899,16 +900,16 @@ class Intron(GenomicSequence):
             next_exon.prev_intron = self
         
         #Prospectively links exons to this one
-        self.prev_exon: Exon|None = prev_exon
-        self.next_exon: Exon|None = next_exon
+        self.prev_exon: Optional[Exon] = prev_exon
+        self.next_exon: Optional[Exon] = next_exon
         
         
         #Attributes whose specific values are to be computed later
         self.variants:    list[Intron]         = []
-        self.c_score:     float|None           = None
-        self.nc_score:    float|None           = None
-        self.unif_score:  float|None           = None
-        self.splice_site: str|None             = None
+        self.c_score:     Optional[float]           = None
+        self.nc_score:    Optional[float]           = None
+        self.unif_score:  Optional[float]           = None
+        self.splice_site: Optional[str]             = None
         self.traits:      dict[str:bool|float] = {}
     
     
@@ -1599,10 +1600,7 @@ def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
         """
         return attr.partition("ID=")[2].partition(';')[0], \
                attr.partition("Parent=")[2].partition(';')[0]
-    
-    
-    fd = open(gff)
-    
+        
     
     #Dict of created genes
     genes: dict[str:Gene] = {}
@@ -1612,83 +1610,84 @@ def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
     mrna_to_gene: dict[str:str] = {}
     
     
-    #Iterate over GFF records
-    for lineno, line in enumerate(fd,1):
-        #Skip comments & pragmas
-        if line.startswith('#'):
-            continue
-        
-        line = line.strip()
-        fields: list[str] = line.split('\t')
-        
-        assert len(fields) == 9, \
-            f"Line {lineno} of GFF file does not have 9 fields:\n{line}"
-        
-        
-        scaffold: str = fields[0]
-        ft:       str = fields[2]
-        start:    int = int(fields[3])-1
-        end:      int = int(fields[4])
-        strand:   str = fields[6]
-        attr:     str = fields[8]
-        
-        
-        if strand not in '-+':
-            continue
-        
-        
-        #Invert strand if requested
-        if invert:
-            strand = '-' if strand == '+' else '+'
-        
-        
-        if ft == "gene":
-            #Get name of gene (from its ID) and instantiate it
-            gene_name: str = get_id_and_parent(attr)[0]
-
-            assert gene_name, \
-                f"Gene @ line {lineno} of GFF has no ID:\n{line}"
+    with ropen(gff) as fd:
+        #Iterate over GFF records
+        for lineno, line in enumerate(fd,1):
+            #Skip comments & pragmas
+            if line.startswith('#'):
+                continue
             
-            #Instantiate new gene
-            genes[gene_name] = Gene(scaffold, start, end, name=gene_name, strand=strand, exons=[])
-        
-
-        elif ft == "exon":
-            #Get name of parent transcript
-            mrna_name: str = get_id_and_parent(attr)[1]
-
-            assert mrna_name, \
-                f"Exon @ line {lineno} of GFF has no Parent:\n{line}"
+            line = line.strip()
+            fields: list[str] = line.split('\t')
             
-            #Keep track of this exon to add to a gene later
-            deferred_exons.append((mrna_name, scaffold, start, end, strand))
-        
-
-        elif ft == "mRNA":
-            #Get name of transcript & its parent gene
-            mrna_name, gene_name = get_id_and_parent(attr)
-
-            assert mrna_name, \
-                f"Transcript @ line {lineno} of GFF has no ID:\n{line}"
-            assert gene_name, \
-                f"Transcript @ line {lineno} of GFF has no Parent:\n{line}"
-
-            #Submit to conversion table
-            mrna_to_gene[mrna_name] = gene_name
+            assert len(fields) == 9, \
+                f"Line {lineno} of GFF file does not have 9 fields:\n{line}"
+            
+            
+            scaffold: str = fields[0]
+            ft:       str = fields[2]
+            start:    int = int(fields[3])-1
+            end:      int = int(fields[4])
+            strand:   str = fields[6]
+            attr:     str = fields[8]
+            
+            
+            if strand not in '-+':
+                continue
+            
+            
+            #Invert strand if requested
+            if invert:
+                strand = '-' if strand == '+' else '+'
+            
+            
+            if ft == "gene":
+                #Get name of gene (from its ID) and instantiate it
+                gene_id: str = get_id_and_parent(attr)[0]
+    
+                assert gene_id, \
+                    f"Gene @ line {lineno} of GFF has no ID:\n{line}"
+                
+                #Instantiate new gene
+                genes[gene_id] = Gene(scaffold, start, end, name=gene_id, strand=strand, exons=[])
+            
+    
+            elif ft == "exon":
+                #Get name of parent transcript
+                mrna_id: str = get_id_and_parent(attr)[1]
+    
+                assert mrna_id, \
+                    f"Exon @ line {lineno} of GFF has no Parent:\n{line}"
+                
+                #Keep track of this exon to add to a gene later
+                deferred_exons.append((mrna_id, scaffold, start, end, strand))
+            
+    
+            elif ft == "mRNA":
+                #Get name of transcript & its parent gene
+                mrna_id, gene_id = get_id_and_parent(attr)
+    
+                assert mrna_id, \
+                    f"Transcript @ line {lineno} of GFF has no ID:\n{line}"
+                assert gene_id, \
+                    f"Transcript @ line {lineno} of GFF has no Parent:\n{line}"
+    
+                #Submit to conversion table
+                mrna_to_gene[mrna_id] = gene_id
     
     
     #Instantiate all exons and link them to their parent gene
-    for mrna_name, scaffold, start, end, strand in deferred_exons:
+    for mrna_id, scaffold, start, end, strand in deferred_exons:
         #Get the name of the exon's grandparent gene
-        assert mrna_name in mrna_to_gene, \
-            f"GFF file contains an exon referencing a missing transcript '{gene_name}'"
-        gene_name: str = mrna_to_gene[mrna_name]
-        assert gene_name in genes, \
-            f"GFF file contains transcript {mrna_name}, referencing a missing gene '{gene_name}'"
+        assert mrna_id in mrna_to_gene, \
+            f"GFF file contains an exon referencing a missing transcript '{mrna_id}'"
+        gene_id: str = mrna_to_gene[mrna_id]
+        assert gene_id in genes, \
+            f"GFF file contains transcript {mrna_id}, referencing a missing gene '{gene_id}'"
         
         
         #Get the grandparent gene
-        gene: Gene = genes[gene_name]
+        gene: Gene = genes[gene_id]
         
         #Instantiate the exon and add it to the gene's exon list
         gene.exons.append(
@@ -1699,14 +1698,13 @@ def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
     
     
     #Submit the name of each transcript to its gene
-    for mrna_name, gene_name in mrna_to_gene.items():
-        assert gene_name in genes, \
-            f"GFF file contains transcript {mrna_name}, referencing a missing gene '{gene_name}'"
+    for mrna_id, gene_id in mrna_to_gene.items():
+        assert gene_id in genes, \
+            f"GFF file contains transcript {mrna_id}, referencing a missing gene '{gene_id}'"
         
-        genes[gene_name].transcript.name = mrna_name
+        genes[gene_id].transcript.name = mrna_id
     
     
-    fd.close()
     return genes
 
 
@@ -1715,7 +1713,7 @@ def deserialize_fasta(fasta: str) -> dict[str:str]:
     Given a path to a FASTA file, deserialize it to a dictionary.
     Keys are sequence names, values are sequences.
     """
-    with open(fasta) as fd:
+    with ropen(fasta) as fd:
         return dict( SimpleFastaParser(fd) )
 
 
@@ -1913,7 +1911,7 @@ def eprint(*args, **kwargs):
     print(*args, file=stderr, **kwargs)
 
 
-def phase(new_phase: str|None = None):
+def phase(new_phase: Optional[str] = None):
     """
     Function used to keep track of phases of the analyses. Calling this function marks the end of
     the previous phase (if there is one), and begins a new one (if a name for it was passed)
