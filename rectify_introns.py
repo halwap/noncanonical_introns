@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from os.path import isfile
+from os.path import isfile, realpath, dirname
 
 ################################################################################
 #   ARGUMENT PARSING
@@ -27,11 +27,13 @@ parser.add_argument("stats", metavar="STATS", nargs='?',
 
 
 #Options
-parser.add_argument("-n", "--nonconv", metavar="MODEL", required=True,
-    help = "Model for scoring nonconventionality")
+parser.add_argument("-n", "--nonconv", metavar="MODEL",
+    help = "Model for scoring nonconventionality",
+    default = dirname(realpath(__file__)) + "/Models/29_11_K_model.sav")
 
-parser.add_argument("-c", "--conv", metavar="MODEL", required=True,
-    help = "Model for scoring conventionality")
+parser.add_argument("-c", "--conv", metavar="MODEL",
+    help = "Model for scoring conventionality",
+    default = dirname(realpath(__file__)) + "/Models/29_11_NK_model.sav")
 
 parser.add_argument("-f", "--force",
     help = "Force overwriting of generated file(s) if they exist",
