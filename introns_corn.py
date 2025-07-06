@@ -4,16 +4,18 @@ from sys import argv
 from argparse import ArgumentParser
 from extras import *
 
-
+###############################################################################
 parser = ArgumentParser()
 
 #Positional arguments: input and output files
 parser.add_argument("gff", metavar="GFF",
-    help = "GFF file contatining annotation")
+	help = "GFF file contatining annotation")
 
 args = parser.parse_args()
 
 
+
+###############################################################################
 require_files([args.gff])
 
 

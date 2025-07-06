@@ -87,4 +87,77 @@ def wopen(path: str) -> TextIO:
 			yield fd
 
 
+def are_altseq(s1: str, s2: str, n: int = 0) -> bool:
+	"""
+	Given two transcripts' sequences, detect if they both originate from the same transcript
+	"""
+	#What follows is a description of how this test works
+	#
+	#Let S be the complete ground truth sequence of the transcript, and
+	#let S1 & S2 be sequences obtained from two separate sequencings of that transcript.
+	#This test assumes that sequencing the transcript can yield any continuous substring of S
+	#(this implicitly assumes insertions, deletions & subsitutions), and so S1 & S2 are such
+	#substrings
+	#
+	#
+	#S, S1 & S2 can take one of the following configurations:
+	#
+	#S:		-------------------------------------------
+	#S1:	 ---------------
+	#S2:	                  ----------------
+	#The two sequencings sequenced separate areas of the transcript
+	#In this case, without access to S, it's impossible to determine whether S1 & S2 are truly
+	#from separate sequencings of S, or if they come from two different transcripts.
+	#
+	#S:		-------------------------------------------
+	#S1:	 ---------------------
+	#S2:	                  ----------------
+	#S1 & S2 overlap partially, with mutual overhangs.
+	#In this case, there exists a suffix of S1 which is also a prefix of S2.
+	#
+	#S:		-------------------------------------------
+	#S1:	 ------------------------------
+	#S2:	               -------------
+	#S1 overlaps S2 completely, with unilateral overhang(s).
+	#In this case, S2 is a substring of S2.
+	#
+	#
+	#This test can yield false negatives in the following case:
+	#1. in the above pictured case #1, where S1 & S2 are separate areas of the transcript
+	#
+	#This test can yield false positives in the following case:
+	#1. if S1 & S2 come from two different but similar transcripts (e.g. two alternative
+	#   transcripts of the same gene), and S1 & S2 both are subsequences of the regions where the
+	#   two transcripts are identical
+	#2. if S1 & S2 come from disparate transcripts but are very short, the sequences may meet the
+	#   test conditions coincidentally - to prevent these cases, the `n' parameter might be used to
+	#   pass a minimal length that either a subsequence or a shared suffix-prefix must be for the
+	#   test to yield a positive result
+	
+	#Get the shorter and longer of s1 & s2
+	shorter = min(s1, s2, key=len)
+	longer =  max(s2, s1, key=len)
+	
+	
+	#If the shorter sequence is shorter than n, there's no way to pass
+	if len(shorter) < n:
+		return False
+	
+	
+	#Check subsequence
+	if shorter in longer:
+		return True
+	
+	#Check shared prefix-suffix (and vice versa)
+	if shorter[:n] == longer[-n:] or longer[:n] == shorter[-n:]:
+		return True
+	
+	#If neither conditions passed, return False
+	return False
 
+
+def truncate_seqids(fasta: dict[str:str]) -> dict[str:str]:
+	"""
+	Given a deserialized FASTA file, truncate the sequence IDs to the first word
+	"""
+	return { seqid.partition(' ')[0]:seq for seqid,seq in fasta.items() }
