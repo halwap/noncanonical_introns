@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from sys import argv
 from argparse import ArgumentParser
 from extras import *
 
@@ -18,7 +17,7 @@ args = parser.parse_args()
 
 
 ###############################################################################
-require_files([args.gff])
+require_files( args.gff )
 
 
 #Loop over GFF records

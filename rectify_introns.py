@@ -72,11 +72,11 @@ args = parser.parse_args()
 
 ###############################################################################
 #Check that all relevant input files exist
-require_files( [ args.gff, args.fasta, args.nonconv, args.conv ] )
+require_files( args.gff, args.fasta, args.nonconv, args.conv )
 
 #If --force was not passed, exit early if output files exist
 if not args.force:
-	refuse_files( [ args.stats, args.outfile ] )
+	refuse_files( args.stats, args.outfile )
 
 
 #Load genes, automatically creating introns with variants

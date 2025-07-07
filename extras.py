@@ -3,6 +3,7 @@ from sys import stdout, stdin
 from typing import *					#type hints
 from contextlib import contextmanager
 from os.path import isfile				#file exists checks
+from itertools import batched
 
 
 def attr_to_dict(attrs: str) -> dict[str:str]:
@@ -43,21 +44,21 @@ def read_tsv(path: str, comment_char: str = None, hlen: int = 0) -> list[str]:
 			yield line.split('\t')
 
 
-def require_files(files: list[str]):
+def require_files(*args):
 	"""
-	Given an iterable of paths, check if all of them exist as files, and raise an exception if not
+	Given one or more paths, check if all of them exist as files, and raise an exception if not
 	"""
-	for file in files:
+	for file in args:
 		#Skip None and "-"
 		if file and file != "-" and not isfile(file):
 			raise FileNotFoundError(f"File {file} does not exist")
 
 
-def refuse_files(files: list[str]):
+def refuse_files(*args):
 	"""
-	Given an iterable of paths, check if none of them exist as files, and raise an exception if yes
+	Given one or more paths, check if none of them exist as files, and raise an exception if yes
 	"""
-	for file in files:
+	for file in args:
 		#Skip None and "-"
 		if file and file != "-" and not isfile(file):
 			raise FileExistsError(f"File {file} already exists")
@@ -87,7 +88,7 @@ def wopen(path: str) -> TextIO:
 			yield fd
 
 
-def are_altseq(s1: str, s2: str, n: int = 0) -> bool:
+def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
 	"""
 	Given two transcripts' sequences, detect if they both originate from the same transcript
 	"""
@@ -124,6 +125,8 @@ def are_altseq(s1: str, s2: str, n: int = 0) -> bool:
 	#
 	#This test can yield false negatives in the following case:
 	#1. in the above pictured case #1, where S1 & S2 are separate areas of the transcript
+	#2. where S1 & S2 come from overlapping aread of the same transcript, but were sequenced with
+	#   error(s)
 	#
 	#This test can yield false positives in the following case:
 	#1. if S1 & S2 come from two different but similar transcripts (e.g. two alternative
@@ -161,3 +164,48 @@ def truncate_seqids(fasta: dict[str:str]) -> dict[str:str]:
 	Given a deserialized FASTA file, truncate the sequence IDs to the first word
 	"""
 	return { seqid.partition(' ')[0]:seq for seqid,seq in fasta.items() }
+
+
+def max_orf_len(s: str) -> int:
+	"""
+	Examine the ORFs of a nucleotide sequence and return the length of the longest ORF
+	Assumes standard translation table and only examines forward ORFs
+	Also considers partial ORFs, i.e. assumes there's a start codon somewhere prior to the start of
+	the sequence
+	"""
+	#ORF opening & closing codons
+	START: set[str] = { "ATG" }
+	STOP:  set[str] = { "TAA", "TAG", "TGA" }
+	
+	
+	#Will keep track of the longest open frame
+	max_len = 0
+	
+
+	#Process all three forward ORFS
+	for orf in range(3):
+		frame_open = True
+		cur_len = 0
+		
+		for codon in batched('N'*orf + s, 3):
+			codon = ''.join(codon).ljust(3, 'N')
+			
+			
+			if frame_open:
+				if codon in STOP:
+					frame_open = False
+					max_len = cur_len if cur_len > max_len else max_len
+					cur_len = 0
+				else:
+					cur_len += 1
+			else:
+				if codon in START:
+					frame_open = True
+					cur_len = 1
+		
+	
+		if frame_open:
+			max_len = cur_len if cur_len > max_len else max_len
+	
+	
+	return max_len

@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from os.path import isfile
+from extras import *
 
 ################################################################################
 parser = ArgumentParser()
@@ -32,11 +32,11 @@ args = parser.parse_args()
 
 ################################################################################
 #Check that all relevant input files exist
-require_files( [ args.gff, args.fasta ] )
+require_files( args.gff, args.fasta )
 
 #If --force was not passed, exit early if output files exist
 if not args.force:
-	refuse_files( [ args.outfile ] )
+	refuse_files( args.outfile )
 
 
 #Load genes, automatically creating introns with variants

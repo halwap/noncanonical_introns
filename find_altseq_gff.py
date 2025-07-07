@@ -2,8 +2,8 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from os.path import isfile
 from itertools import combinations
+from extras import *
 
 ###############################################################################
 parser = ArgumentParser()
@@ -27,7 +27,7 @@ parser.add_argument("-U", "--unstranded",
 
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",
 	help = "Minimal shared sequence length to count as altseq hit",
-	default = 0, type = int)
+	default = 1, type = int)
 
 
 args = parser.parse_args()
@@ -36,7 +36,7 @@ args = parser.parse_args()
 
 ###############################################################################
 #Check that all relevant input files exist
-require_files( [ args.gff, args.fasta, args.groups ] )
+require_files( args.gff, args.fasta, args.groups )
 
 
 phase("Deserialize")
@@ -73,3 +73,5 @@ for group in groups:
 		if altseq:
 			print(f"{g1}\t{g2}")
 
+
+phase()
