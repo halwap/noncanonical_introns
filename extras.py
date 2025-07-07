@@ -60,7 +60,7 @@ def refuse_files(*args):
 	"""
 	for file in args:
 		#Skip None and "-"
-		if file and file != "-" and not isfile(file):
+		if file and file != "-" and isfile(file):
 			raise FileExistsError(f"File {file} already exists")
 
 
@@ -147,12 +147,12 @@ def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
 		return False
 	
 	
-	#Check subsequence
-	if shorter in longer:
+	#Check shared prefix-suffix (both ways)
+	if shorter[:n] == longer[-n:] or longer[:n] == shorter[-n:]:
 		return True
 	
-	#Check shared prefix-suffix (and vice versa)
-	if shorter[:n] == longer[-n:] or longer[:n] == shorter[-n:]:
+	#Check subsequence
+	if shorter in longer:
 		return True
 	
 	#If neither conditions passed, return False

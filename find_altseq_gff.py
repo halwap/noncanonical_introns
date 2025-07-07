@@ -22,7 +22,7 @@ parser.add_argument("fasta", metavar="FASTA",
 
 #Options
 parser.add_argument("-U", "--unstranded",
-	help = "Check both strand configurations",
+	help = "Examine both strands",
 	default = False, action = "store_true")
 
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",

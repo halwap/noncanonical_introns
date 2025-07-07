@@ -18,7 +18,7 @@ parser.add_argument("fasta", metavar="FASTA",
 
 #Options
 parser.add_argument("-U", "--unstranded",
-	help = "Check both strand configurations",
+	help = "Examine both strands",
 	default = False, action = "store_true")
 
 
@@ -28,7 +28,7 @@ args = parser.parse_args()
 
 ###############################################################################
 #Check that all relevant input files exist
-require_files( args.gff, args.fasta, args.groups )
+require_files( args.gff, args.fasta )
 
 
 phase("Deserialize")
@@ -42,22 +42,22 @@ for gene in genes.values():
 	gene.add_seqs(genome, "te")
 
 
-phase("Filter by ORF lengths")
+phase("Calculate ORF lengths")
 for gene in genes.values():
 	#Get transcript sequence
 	mrna: str = gene.transcript.seq
 	
 	
 	#Examine ORFs & compare length of longest one
-	max_len: bool = max_orf_len(mrna) >= args.len
+	max_len: int = max_orf_len(mrna)
 	
 	#Examine reverse ORFs if requested
-	is args.unstranded:
+	if args.unstranded:
 		max_len = max( max_len, max_orf_len(reverse_complement(mrna)) )
 	
 	
 	#Report the ORF length
-	print(f"{gene.nam}\t{max_len}")
+	print(f"{gene.name}\t{max_len}")
 
 
 phase()

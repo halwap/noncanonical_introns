@@ -30,7 +30,7 @@ require_files( args.gff, args.list )
 
 
 #Deserialize list of features
-with open(args.list) as fd:
+with ropen(args.list) as fd:
 	fts = set( line.rstrip() for line in fd )
 
 
@@ -47,5 +47,5 @@ for fields in read_tsv(args.gff, '#'):
 	
 	
 	#Report or not report the feature, depending on its status
-	if ( args.keep and "ID" in fts ) or ( not args.keep and "ID" not in fts ):
+	if ( args.keep and attrs["ID"] in fts ) or ( not args.keep and attrs["ID"] not in fts ):
 		print('\t'.join(fields))

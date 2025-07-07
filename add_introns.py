@@ -68,7 +68,7 @@ for gene in genes:
 phase("Serialize")
 with wopen(args.outfile) as fd:
 	for gene in genes:
-		gene.serialize(fd, False)
+		gene.serialize(fd)
 
 #End last phase to report its timing
 phase()

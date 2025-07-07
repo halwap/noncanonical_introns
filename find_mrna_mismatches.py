@@ -21,16 +21,16 @@ parser.add_argument("xcripts", metavar="XCRIPTS",
 
 
 #Options
-parser.add_argument("-u", "--unstranded",
-	help = "Examine both strands, regardless of GFF's strand information",
+parser.add_argument("-U", "--unstranded",
+	help = "Examine both strands",
 	action = "store_true")
 
 parser.add_argument("-c", "--count",
-	help = "Report number of mismatches, rather than individual occurences",
+	help = "Report number of mismatches, instead of listing mismatches",
 	action = "store_true")
 
 parser.add_argument("-A", "--align",
-	help = "Report alignmens in addition to individual occurences",
+	help = "Report alignments in addition listing occurences",
 	action = "store_true")
 
 
@@ -40,7 +40,7 @@ args = parser.parse_args()
 
 ###############################################################################
 #Check that all relevant input files exist
-require_files( [ args.gff, args.genome, args.xcripts ] )
+require_files( args.gff, args.genome, args.xcripts )
 
 #Will hold number of mismatches found
 mismatch_cnt: int = 0
@@ -89,7 +89,7 @@ for gene_id in genes.keys():
 		if not args.count:
 			print(gene_id)
 			if args.align:
-				if args.unstranded and aln.score(gff_mrna_seq, fa_mrna_seq) > aln.score(revcomp, fa_mrna_seq):
+				if args.unstranded and aln.score(gff_mrna_seq, fa_mrna_seq) < aln.score(revcomp, fa_mrna_seq):
 					gff_mrna_seq = revcomp
 				
 				print(next(aln.align(gff_mrna_seq, fa_mrna_seq)))
