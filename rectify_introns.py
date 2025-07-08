@@ -53,18 +53,6 @@ parser.add_argument("-U", "--unweighted-pairing-scores",
 	help = "Use unweighted pairing scores in intron scoring",
 	default = False, action = "store_true")
 
-parser.add_argument("-P", "--pairing-scores-in-scoring", metavar="HOW",
-	help = "How to treat pairing scores during intron scoring",
-	default = Intron.PairScoresReport.KEEP_ALL.value, type = int)
-
-parser.epilog = """
-Valid values of HOW are:
-0 - Take as-is,
-1 - Drop all,
-2 - Copy highest,
-3 - Drop all but highest
-"""
-
 
 args = parser.parse_args()
 
@@ -110,8 +98,7 @@ for gene in genes:
 score_introns(genes, nonconv_model, conv_model,
 			  unif_score_from_ss = args.force_conv_variants,
 			  batch_size         = args.batch_size,
-			  weighted           = not args.unweighted_pairing_scores,
-			  pair_scores        = Intron.PairScoresReport(args.pairing_scores_in_scoring))
+			  weighted           = not args.unweighted_pairing_scores)
 
 
 phase("Rectify introns")
