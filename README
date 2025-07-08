@@ -1,0 +1,47 @@
+libintrons.py
+extras.py
+	Modules, imported by various scripts.
+	libintrons.py contains the GenomicSequence class and all its subclasses,
+	functions for deserializing GFF & FASTA, as well as scoring introns, plus
+	some miscellaneous functions.
+	extras.py contains various one-off functions.
+	Which file contains what functions is kind of arbitrary.
+
+add_introns.py
+	Given a GFF & FASTA, interpose introns between each pair of exons.
+	The introns will have their splice sites denoted as the "splice_site"
+	attribute.
+
+find_altseq_gff.py
+	Given a GFF & FASTA and a file containing grouped genes, find pairs of
+	transcript sequences which came from the same transcript.
+
+find_altseq_fa.py
+	Like find_altseq_fa.py, but takes only a FASTA file as input, and compares
+	all unique pairs of sequences.
+
+find_mrna_mismatches.py
+	Given a transcriptome-to-genome mapping GFF, a genome FASTA and a
+	transcriptome FASTA, find mappings whose sequences do not match the
+	original transcript sequence.
+
+get_orf_len.py
+	Given a GFF & FASTA, report the length of each transcript's longest.
+
+rectify_introns.py
+	Given a GFF & FASTA, find and score all intron variants, then select the
+	best variant for each intron. 
+
+get_gene_scores.py
+	Report the "avg_intron_score" attribute for every gene in a GFF file.
+
+introns_corn.py
+	Given a GFF, mark each intron with a "splice_site" attribute as
+	conventional or nonconventional based on the splice site sequence.
+
+subset_gff.py
+	Given a GFF & a list of feature IDs, subset the GFF file to exclude 
+	include the listed features and all of their children.
+	Assumes every feature in the GFF with a Parent attribute comes after its
+	parent.
+	
