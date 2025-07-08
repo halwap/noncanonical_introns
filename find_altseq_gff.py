@@ -39,7 +39,6 @@ args = parser.parse_args()
 require_files( args.gff, args.fasta, args.groups )
 
 
-phase("Deserialize")
 genome = deserialize_fasta(args.fasta)
 genes = deserialize_gff(args.gff)
 
@@ -53,7 +52,6 @@ for gene in genes.values():
 	gene.add_seqs(genome, "te")
 
 
-phase("Find matching transcripts")
 for group in groups:
 	#Get a unique pair of genes in this group
 	for g1, g2 in combinations(group, 2):
@@ -74,4 +72,3 @@ for group in groups:
 			print(f"{g1}\t{g2}")
 
 
-phase()

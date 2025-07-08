@@ -31,10 +31,8 @@ args = parser.parse_args()
 require_files( args.gff, args.fasta )
 
 
-phase("Deserialize")
 genome = deserialize_fasta(args.fasta)
 genes = deserialize_gff(args.gff)
-
 
 #Get transcript sequences
 for gene in genes.values():
@@ -42,7 +40,6 @@ for gene in genes.values():
 	gene.add_seqs(genome, "te")
 
 
-phase("Calculate ORF lengths")
 for gene in genes.values():
 	#Get transcript sequence
 	mrna: str = gene.transcript.seq
@@ -58,6 +55,3 @@ for gene in genes.values():
 	
 	#Report the ORF length
 	print(f"{gene.name}\t{max_len}")
-
-
-phase()

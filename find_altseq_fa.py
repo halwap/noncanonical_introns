@@ -33,12 +33,10 @@ args = parser.parse_args()
 require_files( args.fasta )
 
 
-phase("Deserialize")
 xcripts = deserialize_fasta(args.fasta)
 xcripts = truncate_seqids(xcripts)
 
 
-phase("Find matching transcripts")
 #Get a unique pair of genes in this group
 for seqid1, seqid2 in combinations(xcripts, 2):
 	#Get the transcript sequences
@@ -56,6 +54,3 @@ for seqid1, seqid2 in combinations(xcripts, 2):
 	#Report the hit if there was one
 	if altseq:
 		print(f"{seqid1}\t{seqid2}")
-
-
-phase()

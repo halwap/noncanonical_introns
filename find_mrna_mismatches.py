@@ -52,23 +52,19 @@ if args.align:
 
 
 #Load genes, automatically creating introns with variants
-phase("Deserialize")
 genome = deserialize_fasta(args.genome)
 genes = deserialize_gff(args.gff)
 xcripts = deserialize_fasta(args.xcripts)
 xcripts = truncate_seqids(xcripts)
 
 
-phase("Link exons")
 for gene in genes.values():
 	gene.fixup_exons()
 
-phase("Add seqs")
 for gene in genes.values():
 	gene.add_seqs(genome, "gte")
 
 
-phase("Compare seqs")
 for gene_id in genes.keys():
 	#Get sequence of transcripts, based on GFF
 	gff_mrna_seq: str = genes[gene_id].transcript.seq
@@ -93,10 +89,6 @@ for gene_id in genes.keys():
 					gff_mrna_seq = revcomp
 				
 				print(next(aln.align(gff_mrna_seq, fa_mrna_seq)))
-
-
-#End last phase to report its timing
-phase()
 
 
 #Report number of mismatches if needed

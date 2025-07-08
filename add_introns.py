@@ -15,10 +15,6 @@ parser.add_argument("gff", metavar="GFF",
 parser.add_argument("fasta", metavar="FASTA",
 	help = "FASTA file referenced by GFF")
 
-parser.add_argument("outfile", metavar="OUTFILE",
-	help = "File to write annotation with introns to")
-
-
 
 #Options
 parser.add_argument("-f", "--force",
@@ -39,36 +35,22 @@ if not args.force:
 	refuse_files( args.outfile )
 
 
-#Load genes, automatically creating introns with variants
-phase("Deserialize")
+#Load genes
 genome = deserialize_fasta(args.fasta)
 genes = deserialize_gff(args.gff)
 genes = list(genes.values())
 
-
-phase("Link exons")
 for gene in genes:
 	gene.fixup_exons()
-
-phase("Add introns")
-for gene in genes:
+	#Get introns
 	gene.add_introns()
-	
-phase("Add seqs")
-for gene in genes:
 	gene.add_seqs(genome)
-
-phase("Compute traits")
-for gene in genes:
+	#Get intron traits, including splice sites
 	for intron in gene.introns:
 		intron.add_traits()
 
+
 #Serialize all genes
-#Open file for writing
-phase("Serialize")
-with wopen(args.outfile) as fd:
+with wopen('-') as fd:
 	for gene in genes:
 		gene.serialize(fd)
-
-#End last phase to report its timing
-phase()
