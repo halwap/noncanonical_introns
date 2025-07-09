@@ -2,7 +2,7 @@
 
 formats.py
 	Module containing functions for dealing with I/O and specific formats
-	Includes a class & function for iterating over GFF files, among other stuff
+	Includes GFF & TSV parsers, among other stuff
 
 libintrons.py
 	Module containing code for dealing with intron scoring & selection
@@ -28,8 +28,8 @@ find_altseq_gff.py
 	transcript sequences which came from the same transcript
 
 find_altseq_fa.py
-	Like find_altseq_fa.py, but takes only a FASTA file as input, and compares
-	all unique pairs of sequences in the file
+	Like find_altseq_fa.py, but takes only a FASTA file as input, and
+	compares  unique pairs of sequences in the file
 
 find_mrna_mismatches.py
 	Given a transcriptome-to-genome mapping GFF, a genome FASTA and a
@@ -40,8 +40,8 @@ get_orf_len.py
 	Given a GFF & FASTA, report the length of each transcript's longest ORF
 
 rectify_introns.py
-	Given a GFF & FASTA, find and score all intron variants, then select the
-	best variant for each intron
+	Given a GFF & FASTA, find and score all intron variants, then select
+	the  variant for each intron
 
 get_gene_scores.py
 	Report the "avg_intron_score" attribute for every gene in a GFF file
@@ -51,8 +51,7 @@ introns_corn.py
 	conventional or nonconventional, based on the splice site sequence
 
 subset_gff.py
-	Given a GFF & a list of feature IDs, subset the GFF file to exclude/include
-	the listed features and all of their children
-	Assumes every feature in the GFF with a Parent attribute comes after its
-	parent
-	
+	Given a GFF & a list of feature IDs, subset the GFF file to
+	exclude/include	the listed features and all of their children
+	Assumes every feature in the GFF with a Parent attribute comes after
+	its parent

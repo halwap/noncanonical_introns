@@ -249,7 +249,7 @@ class Gene(GenomicSequence):
 		#Sort exons by position
 		self.exons.sort(key=attrgetter("start"))
 		
-		#Validate coords of exons
+		#Validate coordinates
 		assert self.valid_coords(), \
 			f"Exons of {self} have bad coords"
 		
@@ -260,7 +260,7 @@ class Gene(GenomicSequence):
 			right_exon.prev_exon = left_exon
 		
 		
-		#Validate linkage of exons
+		#Validate linkage
 		assert self.valid_links(), \
 			f"Exons of {self} unlinked"
 	
@@ -278,8 +278,8 @@ class Gene(GenomicSequence):
 			return reverse_complement(seq) if self.strand == '-' else seq
 		
 		
-		#Validate coordinates of exons, and introns, if requested
-		assert self.valid_coords('i' in which), \
+		#Validate coordinates
+		assert self.valid_coords(), \
 			f"Exons/introns of {self} have bad coords"
 		
 		
@@ -320,8 +320,8 @@ class Gene(GenomicSequence):
 					f"{intron} in {self}: bad length, {len(intron)} vs {intron.end - intron.start}"
 		
 		
-		#Check that all created sequences match
-		assert self.valid_seqs('i' in which), \
+		#Validate created sequences
+		assert self.valid_seqs(), \
 			f"Seq of {self} differs from joint seq of constituent features"
 	
 	
@@ -333,7 +333,7 @@ class Gene(GenomicSequence):
 		assert len(self.exons) > 0, \
 			f"{self} has no exons"
 		
-		#Validate coordinates & linkage of exons
+		#Validate coordinates & linkage
 		assert self.valid_coords(), \
 			f"Exons of {self} have bad coords"
 		assert self.valid_links(), \
@@ -367,10 +367,10 @@ class Gene(GenomicSequence):
 		assert len(self.exons) == len(self.introns) + 1, \
 			f"{self} has {len(self.exons)} exons, but {len(self.introns)} introns"
 		
-		#Check coords & linkage, this time with introns
-		assert self.valid_coords(True), \
+		#Validate coords & linkage, this time with introns
+		assert self.valid_coords(), \
 			f"Exons/introns of {self} have bad coords"
-		assert self.valid_links(True), \
+		assert self.valid_links(), \
 			f"Exons/introns of {self} unlinked"
 	
 	
@@ -503,7 +503,7 @@ class Gene(GenomicSequence):
 		Convert a Gene and all its children features to a list of GFF instances
 		"""
 		#Validate coordinates
-		assert self.valid_coords(True), \
+		assert self.valid_coords(), \
 			f"Exons/introns of {self} have bad coords"
 		
 		#Check that both the gene and the transcript have names to use as their IDs in the GFF
@@ -580,7 +580,7 @@ class Gene(GenomicSequence):
 		Returns an iterable of interspersed exons & introns, sorted by order within gene, not
 		position
 		"""
-		assert self.valid_coords(True), \
+		assert self.valid_coords(), \
 			f"Exons/introns of {self} have bad coords"
 		
 		#Intersperse exons & introns, reversing their order if needed
@@ -590,92 +590,122 @@ class Gene(GenomicSequence):
 			return roundrobin( self.exons, self.introns)
 	
 	
-	def valid_coords(self, introns_too: bool = False) -> bool:
+	def valid_coords(self) -> bool:
 		"""
-		Check if the coordinates of all the exons and introns of the gene are valid: this includes
-		that exons/introns are within the bounds of the gene, are properly ordered, and are
-		appropriately flush/unflush.
+		Check that the coordinates of the gene and all its sub-features are in order:
+		1. The transcript, all exons & all introns are within the bounds of the gene
+		2. Exons are properly ordered and non-contiguous on the scaffold
+		3. Introns are properly ordered and non-contiguous on the scaffold
+		4. Exons and introns are properly ordered and contiguous on the scaffold
+		Checks which do not apply are skipped
+		"""
+		#Check that the transcript is within the bounds of the gene
+		if self.transcript not in self:
+			return False
 
-		By default only exons are checked; `introns_too' should be set to True to also check
-		introns. Additionally, exons & introns are checked iff the gene has any.
-		"""
-		#Check exons are within bound of gene
-		if any( exon not in self for exon in self.exons ):
-			return False
-		#Check order and non-flushness of exons
-		if any( not l_exon < r_exon for l_exon, r_exon in pairwise(self.exons) ):
-			return False
 		
-		#If intron should be checked
-		if introns_too:
-			#Check introns are within bound of gene
+		#If there are exons to check
+		if self.exons:
+			#Check that all exons are within bounds of the gene
+			if any( exon not in self for exon in self.exons ):
+				return False
+
+			#Check that all exons are properly ordered, and there are gaps between each one
+			if any( not l_exon < r_exon for l_exon, r_exon in pairwise(self.exons) ):
+				return False
+		
+
+		#If there are introns to check
+		if self.introns:
+			#Check that introns exons are within bounds of the gene
 			if any( intron not in self for intron in self.introns ):
 				return False
-			#Check order and non-flushness of introns
+
+			#Check that all introns are properly ordered, and there are gaps between each one
 			if any( not l_intron < r_intron for l_intron, r_intron in pairwise(self.introns) ):
 				return False
-			#Check each exon is before and flush with its following intron
+		
+		
+		#If there are both exons & introns
+		if self.exons and self.introns:
+			#Check that each exon precedes its following intron, and the two are flush
 			if any( not exon <= intron for exon, intron in zip(self.exons, self.introns) ):
 				return False
-			#Check each intron is before and flush with its following exon
+
+			#Check that each intron precedes its following exon, and the two are flush
 			if any( not intron <= exon for intron, exon in zip(self.introns, self.exons[1:]) ):
 				return False
 		
+
 		#If all relevant checks passed, the coordinates are valid
 		return True
 	
 	
-	def valid_links(self, introns_too: bool = False) -> bool:
+	def valid_links(self) -> bool:
 		"""
-		Check if the linkage of all the exons (and optionally, introns) of the gene are valid
+		Check that all exons & introns are properly linked
 		"""
-		#Check that exons are mutually linked
-		if any( not l_exon @ r_exon for l_exon, r_exon in pairwise(self.exons) ):
-			return False
+		#If there are exons to check
+		if self.exons:
+			#Check that each pair of exons is mutually linked
+			if any( not l_exon @ r_exon for l_exon, r_exon in pairwise(self.exons) ):
+				return False
 		
-		#If intron should be checked
-		if introns_too:
-			#Check linkage between each exon and its following intron
+		
+		#If there are both exons & introns
+		if self.exons and self.introns:
+			#Check that each exon and its following intron are mutually linked
 			if any( not exon @ intron for exon, intron in zip(self.exons, self.introns) ):
 				return False
-			#Check linkage between each intron and its following exon
+
+			#Check that each intron and its following exon are mutually linked
 			if any( not intron @ exon for intron, exon in zip(self.introns, self.exons[1:]) ):
 				return False
 		
+
 		#If all relevant checks passed, the links are valid
 		return True
 	
 	
-	def valid_seqs(self, introns_too: bool = False) -> bool:
+	def valid_seqs(self) -> bool:
 		"""
-		Check if the exons' combined sequence matches the transcript's, and optionally, the exons
-		and introns' combined sequence matches the gene's
+		Check that the sequences of the gene and all its sub-features are in order:
+		1. Either all or no exons have sequences
+		2. Either all or no introns have sequences
+		3. The transcript's sequence matches the combined sequence of the exons
+		4. The gene's sequence matches the combined sequence of the exons and introns
+		Checks which do not apply are skipped
 		"""
-		#Check that the transcript & exons all have sequences
-		if not self.transcript.seq:
-			return False
-		if any( not exon.seq for exon in self.exons ):
-			return False
-		
-		#Check if the exons' combined seq matches the transcript's seq
-		if GenomicSequence.concat(self.ordered_exons()) not in self.transcript.seq:
-			return False
+		#Check which specific features actually have sequences
+		gene_seq:       bool = bool(self.seq)
+		transcript_seq: bool = bool(self.transcript.seq)
+		exons_seq:      bool = any(exon.seq for exon in self.exons)
+		introns_seq:    bool = any(intron.seq for intron in self.introns)
 		
 		
-		#If intron should be checked
-		if introns_too:
-			#Check that the gene & introns all have sequences
-			if not self.seq:
+		#If at least one exon has a sequence, check that all exons do
+		if exons_seq:
+			if not all(exon.seq for exon in self.exons):
 				return False
-			if any( not intron.seq for intron in self.introns ):
-				return False
-			
 
-			#Check if the exons' & introns' combined seq matches the gene's seq
-			if GenomicSequence.concat(self.ordered_exons_and_introns()) not in self.seq:
+		#Likewise for introns
+		if introns_seq:
+			if not all(intron.seq for intron in self.introns):
 				return False
 		
 
+		#If both the transcript & exons have sequences, check that the exons' sequnences match the
+		#transcript's
+		if transcript_seq and exons_seq \
+		and GenomicSequence.concat(self.ordered_exons()) != self.transcript.seq:
+			return False
+		
+		#Likewise, if the gene, the introns & exons all have sequences, check that they match
+		if gene_seq and exons_seq and introns_seq \
+		and GenomicSequence.concat(self.ordered_exons_and_introns()) not in self.seq:
+			return False
+		
+		
 		#If all relevant checks passed, the sequences are valid
 		return True
 
