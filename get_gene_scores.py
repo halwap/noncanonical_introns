@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from extras import *
+from formats import *
 
 ###############################################################################
 parser = ArgumentParser()
@@ -21,12 +21,8 @@ require_files( args.gff )
 
 
 #Loop over GFF records
-for fields in read_tsv(args.gff, '#'):
+for entry in parse_gff(args.gff):
 	#Get gene records
-	if fields[2] == "gene":
-		
-		#Convert attributes to dictionary
-		attrs = attr_to_dict(fields[8])
-		
+	if entry.type_ == "gene":
 		#Print gene ID & avg_intron_score if present
-		print('\t'.join([ attrs["ID"], attrs.get("avg_intron_score", "") ]))
+		print(to_tsv( entry.attrs["ID"], entry.attrs.get("avg_intron_score", "NA") ))

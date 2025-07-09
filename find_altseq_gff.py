@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from libintrons import *
 from itertools import combinations
-from extras import *
+from libintrons import *
+from sequtils import are_altseq
 
 ###############################################################################
 parser = ArgumentParser()
@@ -42,14 +42,13 @@ require_files( args.gff, args.fasta, args.groups )
 genome = deserialize_fasta(args.fasta)
 genes = deserialize_gff(args.gff)
 
-#Deserialize gene groups
-with ropen(args.groups) as fd:
-	groups: list[set[str]] = [ set( line.rstrip().split('\t') ) for line in fd ]
-
 #Get transcript sequences
 for gene in genes.values():
 	gene.fixup_exons()
 	gene.add_seqs(genome, "te")
+
+#Deserialize gene groups
+groups: list[set[str]] = [ set( gene_ids ) for gene_ids in parse_tsv(args.groups) ]
 
 
 for group in groups:
@@ -69,6 +68,6 @@ for group in groups:
 		
 		#Report the hit if there was one
 		if altseq:
-			print(f"{g1}\t{g2}")
+			print(to_tsv(g1,g2))
 
 

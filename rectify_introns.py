@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from libintrons import *
 from os.path import realpath, dirname
 from extras import *
+from formats import *
 
 ###############################################################################
 parser = ArgumentParser()
@@ -94,7 +95,7 @@ for gene in genes:
 
 
 #Get score for all introns (& variants) of each gene
-#score_all_introns() automatically triggers new phases
+#score_introns() automatically triggers new phases
 score_introns(genes, nonconv_model, conv_model,
 			  unif_score_from_ss = args.force_conv_variants,
 			  batch_size         = args.batch_size,
@@ -119,54 +120,26 @@ for gene in genes:
 phase("Serialize")
 with wopen(args.outfile) as fd:
 	for gene in genes:
-		gene.serialize(fd)
+		for entry in gene.to_gff():
+			fd.write(str(entry))
+			fd.write('\n')
 
 
 if args.stats:
 	phase("Intron statistics")
 	with wopen(args.stats) as fd:
 		#TSV header
-		fd.write(
-			'\t'.join([
-				"gene",
-				"transcript",
-				"intron_idx",
-				"variant_cnt",
-				"variant_rank",
-				"scaffold",
-				"strand",
-				"start",
-				"end",
-				"unif_score",
-				"c_score",
-				"nc_score",
-				"score_range",
-				"score_outpace",
-				"splice_site",
-				"splice_site_is_conv",
-				"e-5",
-				"i10",
-				"i-10",
-				"e5",
-				"prev_exon_y",
-				"start_r",
-				"end_y",
-				"next_exon_r",
-				"cagctg",
-				"pairing_score_1",
-				"pairing_score_2",
-				"pairing_score_3",
-				"pair_3_-6",
-				"pair_4_-7",
-				"pair_5_-8"
-			]) + '\n'
-		)
+		fd.write(to_tsv(*Intron.STATS))
+		fd.write('\n')
 		
 		#TSV body
 		for gene in genes:
 			for n, intron in enumerate(gene.introns, 1):
-				intron.write_stats(fd, n)
+				all_stats = intron.get_stats(n)
+				for stats in all_stats:
+					fd.write(to_tsv(*stats))
+					fd.write('\n')
 
 
-#End last phase to report its timing
+#Call required to report duration of last phase
 phase()

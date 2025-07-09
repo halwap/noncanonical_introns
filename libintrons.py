@@ -3,29 +3,19 @@
 ###################################################################################################
 
 #Standard library 
+#Type hints
+from __future__ import annotations
+from typing import *
 #Efficient lambdas
 from operator import attrgetter
 #Convenient iteration
 from itertools import pairwise, batched
-#Type hints
-from typing import *
-#Model deserialization
-from pickle import load
 #Diagnostics
 from warnings import filterwarnings
-#Phase duration timing
-from time import time
-#Stderr printing
-from sys import stderr
 #Statistics
 from statistics import mean
-#Enum support
-from enum import Enum
-
 
 #Third-party imports
-#FASTA deserialization
-from Bio.SeqIO.FastaIO import SimpleFastaParser
 #Retrieving seqs from the '-' strand
 from Bio.Seq import reverse_complement
 #Convenient iteration
@@ -33,11 +23,11 @@ from more_itertools import roundrobin
 #Array processing
 from numpy import array, append, empty, argmax
 
-from extras import *
+#Local imports
+from formats import *
 
 #Hide warnings
 filterwarnings("ignore", category=UserWarning)
-
 
 
 
@@ -47,34 +37,41 @@ filterwarnings("ignore", category=UserWarning)
 
 class GenomicSequence:
 	scaffold: str
-	start: int
-	end: int
-	seq: Optional[str]
-	strand: Optional[Literal['+', '-', '.']]
-
-	def __init__(self, scaffold, start, end, seq=None, strand=None):
+	start:    int
+	end:      int
+	strand:   Strand
+	seq:      str|None
+	
+	
+	def __init__(
+		self,
+		scaffold: str,
+		start:    int,
+		end:      int,
+		*,
+		strand:   Strand   = '.',
+		seq:      str|None = None
+	):
 		self.scaffold = scaffold
 		
-
+		
 		#Validate coordinates
 		assert start < end, \
-			f"Invalid coords: start: {start}, end: {end}"
-
+			f"Bad coords: start: {start}, end: {end}"
+		
 		self.start = start
 		self.end   = end
 		
 		
 		#Validate strand
-		assert strand, \
-			f"Bad strand: no value passed"
-		assert len(strand) == 1 and strand in "+-.", \
+		assert strand in set("+-."), \
 			f"Bad strand: {strand} is not one of '+', '-', or '.'"
 		
 		self.strand = strand
 		
 		
+		#Validate sequence length vis-a-vis passed coords
 		if seq:
-			#Validate sequence length vis-a-vis passed coords
 			assert len(seq) == end - start, \
 				f"Length mismatch: {len(seq)} by seq, {end - start} by coords"
 		self.seq = seq
@@ -101,7 +98,7 @@ class GenomicSequence:
 		"""
 		Get length of sequence
 		"""
-		return len(self.seq)
+		return len(self.seq) if self.seq else self.end - self.start
 	
 	def __getitem__(self, index: int|slice):
 		"""
@@ -110,139 +107,141 @@ class GenomicSequence:
 		return self.seq[index]
 	
 
-	def __add__(self, other: Type['GenomicSequence']|str) -> str:
+	def __add__(self, other: Self|str) -> str:
 		"""
-		Concatenate a GenomicSequence (or subclass)'s sequence with another one's, or with a str
+		Concatenate a GenomicSequence's sequence with another one's, or with a str
 		"""
-		if not ( issubclass( type(other), GenomicSequence ) or isinstance(other, str) ):
-			raise TypeError(f"Can't concatenate {type(self).__name__} & {type(other).__name__}")
-		
 		if isinstance(other, str):
 			return self.seq + other
-		else:
+		elif isinstance(other, GenomicSequence):
 			return self.seq + other.seq
+		else:
+			raise TypeError(f"Can't concatenate {type(self).__name__} & {type(other).__name__}")
 	
 
-	def __radd__(self, other: Type['GenomicSequence']|str) -> str:
+	def __radd__(self, other: Self|str) -> str:
 		"""
-		Concatenate a GenomicSequence (or subclass)'s sequence with another one's, or with a str
+		Concatenate a GenomicSequence's sequence with another one's, or with a str
 		"""
-		if not ( issubclass( type(other), GenomicSequence ) or isinstance(other, str) ):
-			raise TypeError(f"Can't concatenate {type(self).__name__} & {type(other).__name__}")
-		
 		if isinstance(other, str):
 			return other + self.seq
-		else:
+		elif isinstance(other, GenomicSequence):
 			return other.seq + self.seq 
+		else:
+			raise TypeError(f"Can't concatenate {type(other).__name__} & {type(self).__name__}")
 	
+
+	@staticmethod
+	def concat(iterable: Iterable[GenomicSequence], sep: str = '') -> str:
+		"""
+		Given an iterable of GenomicSequence instances (subclasses also ok), extract the sequences
+		of each one and concatenate them, with an optional separator between each sequence
+		"""
+		return sep.join( map( attrgetter("seq"), iterable ) )
 	
+
 	#Comparisons for checking strand, scaffold and relative position of two GenomicSequence objects
-	def same_scaff_and_strand(self, other: Type['GenomicSequence']) -> bool:
+	def comparable(self, other: Self) -> bool:
 		"""
 		Check whether two GenomicSequence objects are from the same strand & scaffold
+		This is a necessary conditions for further comparisons to even be considered
 		"""
 		return self.strand == other.strand and self.scaffold == other.scaffold
 	
-	def __lt__(self, other: Type['GenomicSequence']) -> bool:
+	def __lt__(self, other: Self) -> bool:
 		"""
 		Check whether a GenomicSequence is entirely to the right of `self', without flushed borders
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.same_scaff_and_strand(other) \
-		   and self.end < other.start
+		return self.comparable(other) and self.start < self.end < other.start < other.end
 	
-	def __le__(self, other: Type['GenomicSequence']) -> bool:
+	def __le__(self, other: Self) -> bool:
 		"""
 		Check whether a GenomicSequence is entirely to the right of `self', with flushed borders
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.same_scaff_and_strand(other) \
-		   and self.end == other.start
+		return self.comparable(other) and self.start < self.end == other.start < other.end
 	
-	def __contains__(self, other: Type['GenomicSequence']) -> bool:
+	def __contains__(self, other: Self) -> bool:
 		"""
 		Check whether `self' completely overlaps another GenomicSequence
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.same_scaff_and_strand(other) \
-		   and self.start <= other.start \
-		   and other.end <= self.end
+		return self.comparable(other) and self.start <= other.start < other.end <= self.end
 	
-	def __eq__(self, other: Type['GenomicSequence']) -> bool:
+	def __eq__(self, other: Self) -> bool:
 		"""
 		Check whether two GenomicSequence objects have the same coordinates, scaffold & strand
 		"""
-		return self.same_scaff_and_strand(other) \
-		   and self.start == other.start \
-		   and other.end == self.end
+		return self.comparable(other) and self.start == other.start < other.end == self.end
 	
 	
-	#Serialization
-	def emit_gff(self, fd: TextIO, ft: str, attr: Optional[dict[str:str]] = None):
-		"""Serialize a GenomicSequence object to file `fd'
+	def to_gff(self, type_: str = "sequence_feature", **attrs: str) -> GFF:
+		"""
+		Convert a GenomicSequence object to a GFF entry
 		
 		Params:
-			fd: TextIO
-				File descriptor to write to
-			ft: str
-				Feature type to save sequence as, e.g. "gene", "mRNA" etc.
-			attr: dict[str:str] | None
-				A dictionary containing the attributes of the sequence, or None
-				if it should not have any attributes
+			type_: str
+				Type of feature
+				The default type is "sequence_feature"
+			**attrs: str
+				Attributes of the sequence to report, passed as keywords
+				All values should be strings
 		"""
-		assert fd and fd.mode == 'w', \
-			f"Cannot serialize {self} to given file"
-		
-		assert self.strand in "+-.", \
-			f"{self} has invalid strand"
-		
-		
-		#Convert attributes from a dict to a str
-		
-		
-		fd.write(
-			'\t'.join((
-				self.scaffold,      #seqid
-				".",                #source
-				ft,                 #type
-				#+1 because GenomicSequence objects store their coords differently than in GFFs
-				str(self.start+1),  #start
-				str(self.end),      #end
-				'.',                #score
-				self.strand,        #strand
-				'.',                #phase
-				#Convert attributes dictionary to a GFF attribute strin
-				';'.join( map ( '='.join, attr.items() ) ) if attr else '.'
-			)) + '\n'
-		)
+		return GFF(
+					seqid  = self.scaffold,
+					source = "libintrons",
+					type_  = type_,
+					start  = self.start+1,
+					end    = self.end,
+					score  = None,
+					strand = self.strand,
+					phase  = None,
+					attrs  = attrs
+			)
+	
+	
+
+
 
 
 class Gene(GenomicSequence):
-	scaffold: str
-	start: int
-	end: int
-	seq: Optional[str]
-	strand: Optional[Literal['+', '-', '.']]
-
-	transcript: 'Transcript'
-	exons: list['Exon']
-	introns: list['Intron']
-	name: str
-
-	def __init__(self, scaffold, start, end, seq='', strand='',
-				 transcript=None, exons=None, introns=None, name=''):
-		GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
-		self.transcript      = transcript or Transcript(scaffold, start, end, strand=strand)
-		self.exons           = exons or []
-		self.introns         = introns or []
+	scaffold:    str
+	start:       int
+	end:         int
+	strand:      Strand
+	seq:         str|None
+	transcript:  Transcript
+	exons:       list[Exon]
+	introns:     list[Intron]
+	name:        str|None
+	
+	
+	def __init__(self,
+		scaffold:   str,
+		start:      int,
+		end:        int,
+		*,
+		strand:     Strand       = '.',
+		seq:        str|None     = None,
+		transcript: Transcript   = None,
+		exons:      list[Exon]   = [],
+		introns:    list[Intron] = [],
+		name:       str|None     = None
+	):
+		super().__init__(scaffold, start, end, strand=strand, seq=seq)
+		self.exons           = exons
+		self.introns         = introns
 		self.name            = name
+		#Autogenerate a transcript if it was not passed
+		self.transcript      = transcript or Transcript(scaffold, start, end, strand=strand)
 	
 	
 	def fixup_exons(self):
-		'''
+		"""
 		When exons are pushed as-is to Gene.exons, they might not necessarily be sorted
 		ordered and linked to one another -  this methods applies the necessary fixes
-		'''
+		"""
 		#If there's no exons, or only 1 exon, there's nothing to do
 		if len(self.exons) < 2:
 			return
@@ -260,7 +259,7 @@ class Gene(GenomicSequence):
 			left_exon.next_exon = right_exon
 			right_exon.prev_exon = left_exon
 		
-
+		
 		#Validate linkage of exons
 		assert self.valid_links(), \
 			f"Exons of {self} unlinked"
@@ -324,7 +323,7 @@ class Gene(GenomicSequence):
 		#Check that all created sequences match
 		assert self.valid_seqs('i' in which), \
 			f"Seq of {self} differs from joint seq of constituent features"
-
+	
 	
 	def add_introns(self):
 		"""
@@ -374,7 +373,7 @@ class Gene(GenomicSequence):
 		assert self.valid_links(True), \
 			f"Exons/introns of {self} unlinked"
 	
-
+	
 	def add_intron_variants(self, min_exon_len: int):
 		"""
 		Build a list of variants for each intron in the gene
@@ -499,14 +498,13 @@ class Gene(GenomicSequence):
 		self.introns[intron_idx] = variant
 	
 	
-	def serialize(self, fd: TextIO):
+	def to_gff(self) -> list[GFF]:
 		"""
-		Serialize a gene and all its children features (transcript, exons, introns) to a GFF file
+		Convert a Gene and all its children features to a list of GFF instances
 		"""
 		#Validate coordinates
 		assert self.valid_coords(True), \
 			f"Exons/introns of {self} have bad coords"
-		
 		
 		#Check that both the gene and the transcript have names to use as their IDs in the GFF
 		assert self.name, \
@@ -515,66 +513,54 @@ class Gene(GenomicSequence):
 			f"{self.transcript} lacks a name"
 		
 		
-		#GFF attributes dictionary
-		attr: dict[str:str] = {}
+		#Will hold converted entries
+		entries: list[GFF] = []
+		
+		#Detemine whether all introns of the gene have been scored
+		introns_scored = self.introns and all(intron.unif_score != None for intron in self.introns)
 		
 		
-		#Use gene name as ID
-		attr["ID"] = self.name 
+		#Gene
 		
-		#Get mean intron score, if there are scored introns
-		if self.introns and all( intron.unif_score != None for intron in self.introns ):
-			attr["avg_intron_score"] = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
-		
-		#Serialize gene
-		self.emit_gff(fd, "gene", attr)
-		
-		
-		#Modify attributes for transcript - make the gene its parent, and get its ID
-		attr["Parent"] = attr["ID"]
-		attr["ID"] = self.transcript.name
-		
-		#Remove mean intron score for sub-gene features
-		if "avg_intron_score" in attr:
-			del attr["avg_intron_score"]
-		
-		#Serialize transcript
-		self.transcript.emit_gff(fd, "mRNA", attr)
+		#If all introns have been scored, report the average score in attributes
+		if introns_scored:
+			score = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
+			entries.append( super().to_gff("gene", ID=self.name, avg_intron_score=score) )
+		#Otherwise, report only the gene's ID
+		else:
+			entries.append( super().to_gff("gene", ID=self.name) )
 		
 		
-		#Modify attributes for exons & introns - make the transcript their parent
-		attr["Parent"] = attr["ID"]
+		#Transcript
+		mrna_id = self.transcript.name
+		entries.append( self.transcript.to_gff("mRNA", Parent=self.name, ID=mrna_id) )
 		
-		#Serialize exons
+		
+		#Exons
 		for n, exon in enumerate(self.exons, 1):
-			#Generate ID attribute
-			attr["ID"] = f"{attr["Parent"]}.exon{n}"
-
-			exon.emit_gff(fd, "exon", attr)
+			entries.append( exon.to_gff("exon", Parent=mrna_id, ID=f"{mrna_id}.exon{n}") )
 		
-		#Serialize introns
+		
+		#Introns
 		for n, intron in enumerate(self.introns, 1):
-			#Generate ID attribute
-			attr["ID"] = f"{attr["Parent"]}.intron{n}"
+			attrs = { "Parent": mrna_id, "ID": f"{mrna_id}.intron{n}" }
 			
-			#Get splice site attribute
+			#Report splice site if available
 			if intron.splice_site:
-				attr["splice_site"] = intron.splice_site + '/' + \
-									  reverse_complement(intron.splice_site)
+				attrs["splice_site"] = intron.splice_site
 			
-			#Get conventional score attribute
-			if intron.c_score != None:
-				attr["conv_score"] = str(intron.c_score)
+			#Report scores if available
+			if introns_scored:
+					attrs["conv_score"] = str(intron.c_score)
+					attrs["nonconv_score"] = str(intron.nc_score)
 			
-			#Get nonconventional score attribute
-			if intron.nc_score != None:
-				attr["nonconv_score"] = str(intron.nc_score)
-			
-			
-			intron.emit_gff(fd, "intron", attr)
+			entries.append( intron.to_gff("intron", **attrs) )
+		
+		
+		return entries
 	
 	
-	def ordered_exons(self) -> Iterable['Exon']:
+	def ordered_exons(self) -> Iterable[Exon]:
 		"""
 		Returns an iterable of exons, sorted by order within gene, not position
 		"""
@@ -583,10 +569,13 @@ class Gene(GenomicSequence):
 			f"Exons of {self} have bad coords"
 		
 		#Return the exons, ordered as they are within the gene
-		return reversed( self.exons ) if self.strand == '-' else self.exons
+		if self.strand == '-':
+			return reversed( self.exons )
+		else:
+			return self.exons
 	
 	
-	def ordered_exons_and_introns(self) -> Iterable[Union['Exon','Intron']]:
+	def ordered_exons_and_introns(self) -> Iterable[Exon|Intron]:
 		"""
 		Returns an iterable of interspersed exons & introns, sorted by order within gene, not
 		position
@@ -669,7 +658,7 @@ class Gene(GenomicSequence):
 			return False
 		
 		#Check if the exons' combined seq matches the transcript's seq
-		if concat_genseq(self.ordered_exons()) not in self.transcript.seq:
+		if GenomicSequence.concat(self.ordered_exons()) not in self.transcript.seq:
 			return False
 		
 		
@@ -683,7 +672,7 @@ class Gene(GenomicSequence):
 			
 
 			#Check if the exons' & introns' combined seq matches the gene's seq
-			if concat_genseq(self.ordered_exons_and_introns()) not in self.seq:
+			if GenomicSequence.concat(self.ordered_exons_and_introns()) not in self.seq:
 				return False
 		
 
@@ -694,35 +683,55 @@ class Gene(GenomicSequence):
 
 class Transcript(GenomicSequence):
 	scaffold: str
-	start: int
-	end: int
-	seq: str
-	strand: Optional[Literal['+', '-', '.']]
+	start:    int
+	end:      int
+	strand:   Strand
+	seq:      str|None
+	name:     str|None
 	
-	name: str
-
-	def __init__(self, scaffold, start, end, seq='', strand='', name=''):
-		GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
+	
+	def __init__(
+		self,
+		scaffold: str,
+		start:    int,
+		end:      int,
+		*,
+		strand:   Strand   = '.',
+		seq:      str|None = None,
+		name:     str|None = None
+	):
+		super().__init__(scaffold, start, end, strand=strand, seq=seq)
 		self.name = name
 
 
 class Exon(GenomicSequence):
-	scaffold: str
-	start: int
-	end: int
-	seq: Optional[str]
-	strand: Optional[Literal['+', '-', '.']]
-
-	gene:        Optional[Gene]
-	prev_exon:   Optional['Exon']
-	next_exon:   Optional['Exon']
-	prev_intron: Optional['Intron']
-	next_intron: Optional['Intron']
-
-
-	def __init__(self, scaffold, start, end, seq='', strand='',
-				 gene=None, prev_exon=None, next_exon=None, prev_intron=None, next_intron=None):
-		GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
+	scaffold:    str
+	start:       int
+	end:         int
+	strand:      Strand
+	seq:         str|None
+	gene:        Gene|None
+	prev_exon:   Exon|None
+	next_exon:   Exon|None
+	prev_intron: Intron|None
+	next_intron: Intron|None
+	
+	
+	def __init__(
+		self,
+		scaffold:    str,
+		start:       int,
+		end:         int,
+		*,
+		strand:      Strand      = '.',
+		seq:         str|None    = None,
+		gene:        Gene|None   = None,
+		prev_exon:   Exon|None   = None,
+		next_exon:   Exon|None   = None,
+		prev_intron: Intron|None = None,
+		next_intron: Intron|None = None
+	):
+		super().__init__(scaffold, start, end, strand=strand, seq=seq)
 		
 		#If preceeding intron was passed
 		if prev_intron:
@@ -779,7 +788,7 @@ class Exon(GenomicSequence):
 		self.next_exon = next_exon
 	
 	
-	def __matmul__(self, other: Type[GenomicSequence]) -> bool:
+	def __matmul__(self, other: Exon|Intron) -> bool:
 		"""
 		Check if this exon and a following exon or intron are linked together
 		Call with "self @ other_exon" etc.
@@ -795,7 +804,7 @@ class Exon(GenomicSequence):
 		return left and right and (left == self) and (right == other)
 	
 	
-	def __rmatmul__(self, other: Type[GenomicSequence]) -> bool:
+	def __rmatmul__(self, other: Exon|Intron) -> bool:
 		"""
 		Check if this exon and a preceedgin exon or intron are linked together
 		Call with "intron @ self" etc.
@@ -811,77 +820,44 @@ class Exon(GenomicSequence):
 
 
 class Intron(GenomicSequence):
-	"""
-	This is a class for representing introns.
-	
-	Attributes:
-		scaffold: str
-			Name of sequence on which the intron is located
-		start: int
-			Coordinate of first nucleotide of intron within scaffold
-		end: int
-			Coordinate of last nucleotide of intron within scaffold
-		gene: Optional[Gene]
-			The gene this intron is a part of, if one was provided
-		prev_exon: Optional[Exon]
-			The exon preceding the intron (by position in scaffold, not in-gene order), if provided
-		next_exon: Optional[Exon]
-			The exon following the intron (by position in scaffold, not in-gene order), if provided
-		strand: Optional[str]
-			Which strand (+ or -) the intron is located on, if it was provided
-		seq: Optional[str]
-			Nucleotide sequence of the intron, if one was provided
-		variants: list[Intron]
-			Variants (alt positions) of the intron; empty if it has none, or if not yet computed
-		c_score: Optional[float]
-			Conventionality score of the intron, or None if not yet computed
-		nc_score: Optional[float]
-			Nonconventionality score of the intron, or None if not yet computed
-		unif_score: Optional[float]
-			Unified score of the intron, or None if not yet computed
-		splice_site: Optional[str]
-			The splice site of the intron, or None if not yet computed
-		traits: dict[str:bool|float]
-			Structural traits of the intron; empty if not yet computed
-	"""
-	scaffold: str
-	start: int
-	end: int
-	seq: Optional[str]
-	strand: Optional[Literal['+', '-', '.']]
-
-	gene: Optional[Gene]
-	prev_exon: Optional['Exon']
-	next_exon: Optional['Exon']
-	variants: list['Intron']
-	c_score: Optional[float]
-	nc_score: Optional[float]
-	unif_score: Optional[float]
-	splice_site: Optional[str]
-	trais: dict[str:bool|float]
+	scaffold:    str
+	start:       int
+	end:         int
+	strand:      Strand
+	seq:         str|None
+	gene:        Gene|None
+	prev_exon:   Exon|None
+	next_exon:   Exon|None
+	variants:    list[Intron]
+	c_score:     float|None
+	nc_score:    float|None
+	unif_score:  float|None
+	splice_site: str|None
+	trais:       dict[str:bool|float]
 
 
 	def __init__(
-				self,
-				scaffold:  str,
-				start:     int,
-				end:       int,
-				seq:       Optional[str]  = None,
-				strand:    Optional[str]  = None,
-				gene:      Optional[Gene] = None,
-				prev_exon: Optional[Exon] = None,
-				next_exon: Optional[Exon] = None,
-			):
-		GenomicSequence.__init__(self, scaffold, start, end, seq=seq, strand=strand)
+		self,
+		scaffold:  str,
+		start:     int,
+		end:       int,
+		*,
+		strand:    Strand    = '.',
+		seq:       str|None  = None,
+		gene:      Gene|None = None,
+		prev_exon: Exon|None = None,
+		next_exon: Exon|None = None,
+	):
+		super().__init__(scaffold, start, end, strand=strand, seq=seq)
 		
-
+		
 		#Validate `gene'
 		if gene:
 			assert self in gene, \
 				f"{self} outside of {gene}"
-		self.gene: Optional[Gene] = gene
+		self.gene = gene
 		
-
+		
 		#If preceeding exon was passed
 		if prev_exon:
 			#Validate input
@@ -890,7 +866,7 @@ class Intron(GenomicSequence):
 			
 			#Link this exon to that one
 			prev_exon.next_intron = self
-
+		
 		#If following exon was passed
 		if next_exon:
 			#Validate input
@@ -900,17 +876,17 @@ class Intron(GenomicSequence):
 			next_exon.prev_intron = self
 		
 		#Prospectively links exons to this one
-		self.prev_exon: Optional[Exon] = prev_exon
-		self.next_exon: Optional[Exon] = next_exon
+		self.prev_exon = prev_exon
+		self.next_exon = next_exon
 		
 		
 		#Attributes whose specific values are to be computed later
-		self.variants:    list[Intron]         = []
-		self.c_score:     Optional[float]           = None
-		self.nc_score:    Optional[float]           = None
-		self.unif_score:  Optional[float]           = None
-		self.splice_site: Optional[str]             = None
-		self.traits:      dict[str:bool|float] = {}
+		self.variants    = []
+		self.c_score     = None
+		self.nc_score    = None
+		self.unif_score  = None
+		self.splice_site = None
+		self.traits      = {}
 	
 	
 	def get_variants(self, min_exon_len: int):
@@ -1198,6 +1174,7 @@ class Intron(GenomicSequence):
 		#CAG & CTG at appropriate positions
 		self.traits["intron_cag"] = len(self) >= 6 and self[3:6]   == "CAG"
 		self.traits["intron_ctg"] = len(self) >= 8 and self[-8:-5] == "CTG"
+		self.traits["intron_cagctg"] = self.traits["intron_cag"] and self.traits["intron_ctg"]
 		
 		
 		#Add splice site; will be None, if the intron is < 4 nucleotides
@@ -1205,7 +1182,7 @@ class Intron(GenomicSequence):
 		self.splice_site: str = self[:2] + self[-2:] if len(self) >= 4 else None
 		
 		#Intron has a conventional splice site
-		self.traits["ss_is_conv"] = self.splice_site in { "GTAG", "GCAG", "CTAC", "CTGC" }
+		self.traits["ss_is_conv"] = self.splice_site in CONV_SS
 		
 		
 		
@@ -1343,7 +1320,7 @@ class Intron(GenomicSequence):
 		return array([
 			self.traits["prev_exon_y"],
 			self.traits["intron_r"],
-			self.traits["intron_cag"] and self.traits["intron_ctg"],
+			self.traits["intron_cagctg"],
 			self.traits["intron_y"],
 			self.traits["next_exon_r"],
 			self.traits["pair_score_2"],
@@ -1352,156 +1329,213 @@ class Intron(GenomicSequence):
 		])
 	
 	
-	def write_stats(self, fd: TextIO, idx: int = 0):
+	def get_stats(self, idx: int = 0) -> list[list[str|int|float|bool]]:
 		"""
-		Write statistics for an intron & for all of its variants to a file. The statistics are:
-		 1. the name of the gene of the intron
-		 2. the name of the transcript of the intron
-		 3. the index of the intron within the gene (taken from `idx')
-		 4. the number of variants the intron has
-		 5. the rank of the variant (the base intron is rank #0, variants are ranked by score)
-		 6. the scaffold
-		 7. the strand
-		 8. the start coordinate
-		 9. the end coordinate
-		10. unified score
-		11. conv score
-		12. nonconv score
-		13. the difference between the conv & nonconv score
-		14. the difference between the unified scores of the base intron and the best variant
-			(base intron only)
-		15. splice site
-		16. whether the splice site is conventional
-		17. last 5/first 10 nucleotides of the preceding exon and the intron/variant, respectively
-		18. last 10/first 10 nucleotides of the intron/variant and the following exon, respectively
-		19. whether the last nucleotide of the preceding exon is a pyrimidine
-		20. whether the first nucleotide is a purine
-		21. whether the last nucleotide is a pyrimidine
-		22. whether the first nucleotide of the preceding exon is a purine
-		23. whether the characteristic CAG & CTG are present at the approptiate positions
-		24. whether the fourth and sixth-to-last nucleotide pair up
-		25. whether the fifth and seventh-to-last nucleotide pair up
-		26. whether the sixth and eighth-to-last nucleotide pair up
+		Get statistics for an intron & all of its variants. The statistics are, in order:
+		
+		Per-intron statistics:
+			the name of the gene of the intron
+			the name of the transcript of the intron
+			the index of the intron within the gene (taken from `idx')
+			the number of variants the intron has
+			the scaffold
+			the strand
+			the difference between the unified scores of the base intron and the best variant,
+				as a measure of certainty of variant selection for this intron
+		
+		Per-variant statistics:
+			the start coordinate
+			the end coordinate
+			the rank of the variant (the base intron is rank #0, variants are ranked by score)
+			unified score
+			conv score
+			nonconv score
+			the difference between the conv & nonconv score,
+				as a measure of certainty of this variant's classification
+			splice site
+			whether the splice site is conventional
+			last 5 nucleotides of the preceding exon
+			first 10 nucleotides of the intron/variant
+			last 10 nucleotides of the intron/variant
+			first 5 nucleotides of the following exon
+			whether the last nucleotide of the preceding exon is a pyrimidine
+			whether the first nucleotide is a purine
+			whether the last nucleotide is a pyrimidine
+			whether the first nucleotide of the preceding exon is a purine
+			whether the characteristic CAG & CTG are present at the approptiate positions
+			whether the fourth and sixth-to-last nucleotide pair up
+			whether the fifth and seventh-to-last nucleotide pair up
+			whether the sixth and eighth-to-last nucleotide pair up
 		"""
 		#Sort variants by descending score
 		self.variants.sort(key = lambda v: (v.unif_score, v.c_score, v.nc_score), reverse=True)
 		
 		
-		#Get index of intron as a string
-		idx: str = str(idx)
-		
-		
 		#Build list containing the base intron and all variants for the purpose of other asserts
-		assert ( eachvar := [self] + self.variants )
+		assert ( allvars := [self] + self.variants )
 		
 		#Validate that the intron and all the variants all have the required information
-		assert all( var.gene                 for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks parent gene"
-		assert all( var.gene.name            for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks parent gene's name"
-		assert all( var.gene.transcript      for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks parent transcript"
-		assert all( var.gene.transcript.name for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks parent transcript's name"
-		assert all( var.unif_score != None   for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks unified score"
-		assert all( var.c_score    != None   for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks conventional score"
-		assert all( var.nc_score   != None   for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks nonconventional score"
-		assert all( var.traits               for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks computed traits"
-		assert all( var.prev_exon            for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks preceding exon"
-		assert all( var.next_exon            for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks following exon"
-		assert all( var.seq                  for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks sequence"
-		assert all( var.prev_exon.seq        for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks sequence of preceding exon"
-		assert all( var.next_exon.seq        for var in eachvar), \
-			f"{self} (or variant(s) thereof) lacks sequence of following exon"
+		assert all( var.gene                 for var in allvars ), \
+			f"{self} (or a variant) lacks parent gene"
+		assert all( var.gene.name            for var in allvars ), \
+			f"{self} (or a variant) lacks parent gene's name"
+		assert all( var.gene.transcript      for var in allvars ), \
+			f"{self} (or a variant) lacks parent transcript"
+		assert all( var.gene.transcript.name for var in allvars ), \
+			f"{self} (or a variant) lacks parent transcript's name"
+		assert all( var.unif_score != None   for var in allvars ), \
+			f"{self} (or a variant) lacks unified score"
+		assert all( var.c_score    != None   for var in allvars ), \
+			f"{self} (or a variant) lacks conventional score"
+		assert all( var.nc_score   != None   for var in allvars ), \
+			f"{self} (or a variant) lacks nonconventional score"
+		assert all( var.traits               for var in allvars ), \
+			f"{self} (or a variant) lacks computed traits"
+		assert all( var.prev_exon            for var in allvars ), \
+			f"{self} (or a variant) lacks preceding exon"
+		assert all( var.next_exon            for var in allvars ), \
+			f"{self} (or a variant) lacks following exon"
+		assert all( var.seq                  for var in allvars ), \
+			f"{self} (or a variant) lacks sequence"
+		assert all( var.prev_exon.seq        for var in allvars ), \
+			f"{self} (or a variant) lacks sequence of preceding exon"
+		assert all( var.next_exon.seq        for var in allvars ), \
+			f"{self} (or a variant) lacks sequence of following exon"
 		
 		
 		#Check whether the inton is on the positive strand
 		pos: bool = self.strand == '+'
 		
 		
-		#Write statistics for the base intron
-		fd.write(
-			'\t'.join([
-				self.gene.name,
-				self.gene.transcript.name,
-				idx,
-				str(len(self.variants)),
-				'0',
-				self.scaffold,
-				self.strand,
-				str(self.start+1),
-				str(self.end),
-				str(self.unif_score),
-				str(self.c_score),
-				str(self.nc_score),
-				str( abs(self.c_score - self.nc_score) ),
-				str( abs(self.unif_score - self.variants[0].unif_score) ) if self.variants else "",
-				self.splice_site or "too short",
-				str(self.traits["ss_is_conv"]),
-				( self.prev_exon if pos else self.next_exon )[-5:],
-				self[:10],
-				self[-10:],
-				( self.next_exon if pos else self.prev_exon )[:5],
-				str(self.traits["prev_exon_y"]),
-				str(self.traits["intron_r"]),
-				str(self.traits["intron_y"]),
-				str(self.traits["next_exon_r"]),
-				str(self.traits["intron_cag"] and self.traits["intron_ctg"]),
-				str(self.traits["pair_score_1"]),
-				str(self.traits["pair_score_2"]),
-				str(self.traits["pair_score_3"]),
-				str(self.traits["pair_3_6"]),
-				str(self.traits["pair_4_7"]),
-				str(self.traits["pair_5_8"])
-			]) + '\n'
-		)
+		#Measure of certainty of variant selection for this intron
+		if self.variants:
+			certainty: float = self.unif_score - self.variants[0].unif_score
+		#Empty string if there are no variants
+		else:
+			certainty: str = ""
 		
 		
-		#Write statistics for each variant
+		#Will hold the returned stats
+		stats: list[list[str|int|float|bool]] = []
+		
+
+		#Get statistics for the base intron
+		stats.append([
+			#Per-intron stats
+			self.gene.name,										#Name of gene
+			self.gene.transcript.name,							#Name of transcript
+			idx,												#Index of intron within gene
+			len(self.variants),									#Number of variants of intron
+			self.scaffold,										#Scaffold
+			self.strand,										#Strand
+			certainty,											#Certainty of variant selection
+			#Per-variant stats
+			self.start+1,										#Start position
+			self.end,											#End position
+			0,													#Variant's rank
+			self.unif_score,									#Unified score
+			self.c_score,										#Conventionality score
+			self.nc_score,										#Nonconventionality score
+			abs(self.c_score - self.nc_score),					#Variant classification certainty
+			self.splice_site or "",								#Splice site, if available
+			self.traits["ss_is_conv"],							#Is the splice site conventional
+			( self.prev_exon if pos else self.next_exon )[-5:],	#Last  5  nt of prev exon
+			self[:10],											#First 10 nt of intron
+			self[-10:],											#Last  10 nt of intron
+			( self.next_exon if pos else self.prev_exon )[:5],	#First 5  nt of next exon
+			self.traits["prev_exon_y"],							#Is the prev exon's last  nt C or T
+			self.traits["intron_r"],							#Is the intron's    first nt A or G
+			self.traits["intron_y"],							#Is the intron's    last  nt C or T
+			self.traits["next_exon_r"],							#Is the next exon's first nt A or G
+			self.traits["intron_cagctg"],						#Are CAG & CTG present
+			self.traits["pair_score_1"],						#Pairing score
+			self.traits["pair_score_2"],						#Pairing score
+			self.traits["pair_score_3"],						#Pairing score
+			self.traits["pair_3_6"],							#Do positions 3 and -6 pair up
+			self.traits["pair_4_7"],							#Do positions 4 and -7 pair up
+			self.traits["pair_5_8"]								#Do positions 5 and -8 pair up
+		])
+		
+		
+		#Get statistics for each variant
 		for n, var in enumerate(self.variants, 1):
-			fd.write(
-				'\t'.join([
-					self.gene.name,
-					self.gene.transcript.name,
-					idx,
-					str(len(self.variants)),
-					str(n),
-					self.scaffold,
-					self.strand,
-					str(var.start+1),
-					str(var.end),
-					str(var.unif_score),
-					str(var.c_score),
-					str(var.nc_score),
-					str( abs(var.c_score - var.nc_score) ),
-					"",
-					var.splice_site or "too short",
-					str(var.traits["ss_is_conv"]),
-					( var.prev_exon if pos else var.next_exon )[-5:],
-					var[:10],
-					var[-10:],
-					( var.next_exon if pos else var.prev_exon )[:5],
-					str(var.traits["prev_exon_y"]),
-					str(var.traits["intron_r"]),
-					str(var.traits["intron_y"]),
-					str(var.traits["next_exon_r"]),
-					str(var.traits["intron_cag"] and var.traits["intron_ctg"]),
-					str(var.traits["pair_score_1"]),
-					str(var.traits["pair_score_2"]),
-					str(var.traits["pair_score_3"]),
-					str(var.traits["pair_3_6"]),
-					str(var.traits["pair_4_7"]),
-					str(var.traits["pair_5_8"])
-				]) + '\n'
-			)
+			stats.append([
+				#Per-intron stats are only reported for optimal variants
+				"",													#Name of gene
+				"",													#Name of transcript
+				"",													#Index of intron within gene
+				"",													#Number of variants of intron
+				"",													#Scaffold
+				"",													#Strand
+				"",													#Certainty of variant selection
+				#Per-variant stats
+				var.start+1,										#Start position
+				var.end,											#End position
+				n,													#Variant's rank
+				var.unif_score,										#Unified score
+				var.c_score,										#Conventionality score
+				var.nc_score,										#Nonconventionality score
+				abs(var.c_score - var.nc_score),					#Variant classif. certainty
+				var.splice_site or "",								#Splice site, if available
+				var.traits["ss_is_conv"],							#Is the splice site conv.
+				( var.prev_exon if pos else var.next_exon )[-5:],	#Last  5  nt of prev exon
+				var[:10],											#First 10 nt of intron
+				var[-10:],											#Last  10 nt of intron
+				( var.next_exon if pos else var.prev_exon )[:5],	#First 5  nt of next exon
+				var.traits["prev_exon_y"],							#Is the prev exon's last nt C/T
+				var.traits["intron_r"],								#Is the intron's    1st  nt A/G
+				var.traits["intron_y"],								#Is the intron's    last nt C/T
+				var.traits["next_exon_r"],							#Is the next exon's 1st  nt A/G
+				var.traits["intron_cagctg"],						#Are CAG & CTG present
+				var.traits["pair_score_1"],							#Pairing score
+				var.traits["pair_score_2"],							#Pairing score
+				var.traits["pair_score_3"],							#Pairing score
+				var.traits["pair_3_6"],								#Do positions 3 and -6 pair up
+				var.traits["pair_4_7"],								#Do positions 4 and -7 pair up
+				var.traits["pair_5_8"]								#Do positions 5 and -8 pair up
+			])
+		
+		
+		return stats
+	
+	
+	#List of descriptor for every stat returned by Intron.get_stats()
+	STATS: list[str] = [
+		#Per-intron stats
+		"gene",
+		"transcript",
+		"intron_idx",
+		"variant_cnt",
+		"scaffold",
+		"strand",
+		"score_outpace",
+		#Per-variant stats
+		"start",
+		"end",
+		"variant_rank",
+		"unif_score",
+		"c_score",
+		"nc_score",
+		"score_range",
+		"splice_site",
+		"splice_site_is_conv",
+		"e-5",
+		"i10",
+		"i-10",
+		"e5",
+		"prev_exon_y",
+		"start_r",
+		"end_y",
+		"next_exon_r",
+		"cagctg",
+		"pairing_score_1",
+		"pairing_score_2",
+		"pairing_score_3",
+		"pair_3_-6",
+		"pair_4_-7",
+		"pair_5_-8"
+	]
+
 
 
 
@@ -1510,17 +1544,11 @@ class Intron(GenomicSequence):
 #   DESERIALIZATION
 ###################################################################################################
 
-def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
-	def get_id_and_parent(attr: str) -> tuple[str, str]:
-		"""
-		Given an attribute field, extract the "ID" and "Parent" fields, in that order.
-		Returns an empty string if a given field is absent from the attribute field.
-		If `invert' is true, the strand field's value will be inverted for all processed records.
-		"""
-		return attr.partition("ID=")[2].partition(';')[0], \
-			   attr.partition("Parent=")[2].partition(';')[0]
-		
-	
+def deserialize_gff(path: str) -> dict[str:Gene]:
+	"""
+	Given a path to a GFF file, deserialize it to a dictionary containing all "gene" features
+	listed therein, with each gene's "mRNA" & "exon" feature(s) linked to it
+	"""	
 	#Dict of created genes
 	genes: dict[str:Gene] = {}
 	#List containing info about exons to be created after parsing the whole file
@@ -1529,70 +1557,48 @@ def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
 	mrna_to_gene: dict[str:str] = {}
 	
 	
-	with ropen(gff) as fd:
-		#Iterate over GFF records
-		for lineno, line in enumerate(fd,1):
-			#Skip comments & pragmas
-			if line.startswith('#'):
-				continue
+	#for scaffold, source, type_, start, end, strand, 
+	for entry in parse_gff(path):
+		#Ensure each entry has an ID attribute
+		assert "ID" in entry.attrs, \
+			f"No ID attribute in GFF entry '{entry}'"
+		
+		#Reject features with a '.' strand
+		if entry.strand not in '-+':
+			continue
+		
+		
+		scaffold: str           = entry.seqid
+		type_:    str           = entry.type_
+		start:    int           = entry.start-1
+		end:      int           = entry.end
+		strand:   Strand        = entry.strand
+		attrs:    dict[str,str] = entry.attrs
+		id_:      str           = attrs["ID"]
+		
+		
+		#Process "gene", "mRNA" & "exon" features appropriately
+		if type_ == "gene":
+			#Instantiate new gene
+			genes[id_] = Gene(scaffold, start, end, name=id_, strand=strand, exons=[])
+		
+		
+		elif type_ == "mRNA":
+			#Ensure that mRNA feature has a Parent
+			assert "Parent" in attrs, \
+				f"No Parent attribute in GFF entry '{entry}'"
 			
-			line = line.strip()
-			fields: list[str] = line.split('\t')
+			#Submit to conversion table
+			mrna_to_gene[id_] = attrs["Parent"]
+		
+
+		elif type_ == "exon":
+			#Ensure that exon feature has a Parent
+			assert "Parent" in attrs, \
+				f"No Parent attribute in GFF entry '{entry}'"
 			
-			assert len(fields) == 9, \
-				f"Line {lineno} of GFF file does not have 9 fields:\n{line}"
-			
-			
-			scaffold: str = fields[0]
-			ft:       str = fields[2]
-			start:    int = int(fields[3])-1
-			end:      int = int(fields[4])
-			strand:   str = fields[6]
-			attr:     str = fields[8]
-			
-			
-			if strand not in '-+':
-				continue
-			
-			
-			#Invert strand if requested
-			if invert:
-				strand = '-' if strand == '+' else '+'
-			
-			
-			if ft == "gene":
-				#Get name of gene (from its ID) and instantiate it
-				gene_id: str = get_id_and_parent(attr)[0]
-	
-				assert gene_id, \
-					f"Gene @ line {lineno} of GFF has no ID:\n{line}"
-				
-				#Instantiate new gene
-				genes[gene_id] = Gene(scaffold, start, end, name=gene_id, strand=strand, exons=[])
-			
-	
-			elif ft == "exon":
-				#Get name of parent transcript
-				mrna_id: str = get_id_and_parent(attr)[1]
-	
-				assert mrna_id, \
-					f"Exon @ line {lineno} of GFF has no Parent:\n{line}"
-				
-				#Keep track of this exon to add to a gene later
-				deferred_exons.append((mrna_id, scaffold, start, end, strand))
-			
-	
-			elif ft == "mRNA":
-				#Get name of transcript & its parent gene
-				mrna_id, gene_id = get_id_and_parent(attr)
-	
-				assert mrna_id, \
-					f"Transcript @ line {lineno} of GFF has no ID:\n{line}"
-				assert gene_id, \
-					f"Transcript @ line {lineno} of GFF has no Parent:\n{line}"
-	
-				#Submit to conversion table
-				mrna_to_gene[mrna_id] = gene_id
+			#Keep track of this exon to add to a gene later
+			deferred_exons.append((attrs["Parent"], scaffold, start, end, strand))
 	
 	
 	#Instantiate all exons and link them to their parent gene
@@ -1627,24 +1633,6 @@ def deserialize_gff(gff: str, invert: bool = False) -> dict[str:Gene]:
 	return genes
 
 
-def deserialize_fasta(fasta: str) -> dict[str:str]:
-	"""
-	Given a path to a FASTA file, deserialize it to a dictionary.
-	Keys are sequence names, values are sequences.
-	"""
-	with ropen(fasta) as fd:
-		return dict( SimpleFastaParser(fd) )
-
-
-def load_model(model: str):
-	"""
-	Load a pickled sklearn model from filename
-	"""
-	with open(model, 'rb') as fd:
-		return load(fd)
-
-
-
 
 ###################################################################################################
 #   INTRON SCORING
@@ -1654,12 +1642,16 @@ def load_model(model: str):
 #Each pair of nucleotides which actually pair up in pre-mRNA have the following weights:
 #A-T: 0.5, C-G: 1.0, G-T: 0.375.
 #Non-pairing nucleotide pairs have an implicit weight of 0.0.
-#For commutativity, each pairing pair is present in this dictionary forward & backwards.
+#For commutativity, each pairing pair is present in this dictionary in both orders.
 PAIR_WEIGHTS: dict[tuple[str,str]:float] = {
 	('A','T'): 0.5,   ('T','A'): 0.5,
 	('G','C'): 1.0,   ('C','G'): 1.0,
 	('G','T'): 0.375, ('T','G'): 0.375
 }
+
+
+#Splice sites considered conventional
+CONV_SS: set[str] = { "GTAG", "GCAG", "CTAC", "CTGC" }
 
 
 def test_pairs(seq1: str, seq2: str, weighted: bool = True) -> list[float]:
@@ -1714,10 +1706,15 @@ def max_sum_of_run(iterable: Iterable[float|int]) -> float:
 	return max_sum
 
 
-def score_introns(genes: Iterable[Gene], nc_model, c_model, *,
-				  unif_score_from_ss: bool = False,
-				  batch_size: int = 0,
-				  weighted: bool = True):
+def score_introns(
+	genes:              Iterable[Gene],
+	nc_model,
+	c_model,
+	*,
+	unif_score_from_ss: bool           = False,
+	batch_size:         int            = 0,
+	weighted:           bool           = True
+):
 	"""
 	Calculate conventional & nonconventional structure compatibility scores for all introns
 	(& variants) of the passed genes, using the supplied models.
@@ -1725,16 +1722,16 @@ def score_introns(genes: Iterable[Gene], nc_model, c_model, *,
 	Each scored intron is given a conventionality score and a nonconventionality score, plus a
 	unified score, which is the higher score of the two.
 
-	Alternatively, if `unif_by_ss' is True, introns with conventional splice sites are instead
-	forced to have the maximum possible unified score, and introns without copy the unified score
-	from their nonconventional score.
+	Alternatively, if `unif_score_from_ss' is True, introns with conventional splice sites are
+	instead	forced to have the maximum possible unified score, and introns without take the
+	nonconventional score as the unified score
 
 	By default, all introns are scored at once, but if number of introns is very large, an OOM
 	error might occur. To remedy this, the introns can be processed in batches by passing a
 	positive integer to `batch_size'. This value will be the size of a single batch of introns.
 	Smaller values reduce the risk of an OOM error, but slow down scoring.
 	
-	`weighted' controls whether the introns' pairing scores are weighted or unweighted.
+	`weighted' controls whether the introns' pairing scores are calculated as weighted/unweighted.
 	"""
 	#Build list of introns to assess
 	phase("Score introns: gather")
@@ -1800,55 +1797,23 @@ def score_introns(genes: Iterable[Gene], nc_model, c_model, *,
 		"Conv scoring went wrong"
 	
 	
+	#Convert NumPy arrays to Python list, which also converts NumPy floats to regular Python floats
+	c_scores = c_scores.tolist()
+	nc_scores = nc_scores.tolist()
+
+	
 	#Submit each intron's scores to the actual object
 	phase("Score introns: save scores")
 	for intron, c_score, nc_score in zip(introns, c_scores, nc_scores):
 		#Per-class score
-		intron.c_score  = float(c_score)
-		intron.nc_score = float(nc_score)
+		intron.c_score  = c_score
+		intron.nc_score = nc_score
 		#Unfied score
 		if unif_score_from_ss:
-			intron.unif_score = 1.0 if intron.traits["ss_is_conv"] else float(nc_score)
+			intron.unif_score = 1.0 if intron.traits["ss_is_conv"] else nc_score
 		else:
-			intron.unif_score = float(max( c_score, nc_score ))
+			intron.unif_score = max( c_score, nc_score )
 
 
 
-
-###################################################################################################
-#   MISCELLANEOUS
-###################################################################################################
-
-def eprint(*args, **kwargs):
-	"""
-	Print a message to stderr
-	Sans the "file" parameter, semantics are identical to builtin print()
-	"""
-	print(*args, file=stderr, **kwargs)
-
-
-def phase(new_phase: Optional[str] = None):
-	"""
-	Function used to keep track of phases of the analyses. Calling this function marks the end of
-	the previous phase (if there is one), and begins a new one (if a name for it was passed)
-	"""
-	#If this is the end of a phase, end it by reporting its duration
-	if hasattr(phase, "timer"):
-		#Move the printer cursor one line up, to the 40th character of the line
-		eprint(f"\033[0;A\033[40;C{time() - phase.timer:.3f} sec")
-	
-	#If a new_phase was requested, start it by printing its name
-	if new_phase != None:
-		eprint(new_phase.ljust(40))
-	
-	#Reset the timer
-	phase.timer = time()
-
-
-def concat_genseq(iterable: Iterable[Type[GenomicSequence]], sep: str = '') -> str:
-	"""
-	Given an iterable of GenomicSequence (and/or subclass) objects, extract the sequences of each
-	one and concatenate them, with an optional separator between each sequence
-	"""
-	return sep.join( map( attrgetter("seq"), iterable ) )
 

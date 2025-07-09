@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from extras import *
+from formats import *
+from libintrons import CONV_SS
 
 ###############################################################################
 parser = ArgumentParser()
@@ -21,17 +22,12 @@ require_files( args.gff )
 
 
 #Loop over GFF records
-for fields in read_tsv(args.gff, '#'):
+for entry in parse_gff(args.gff):
 	#If this record is an intron
-	if fields[2] == "intron":
+	if entry.type_ == "intron":
 		
-		#Convert attributes to dictionary
-		attrs = attr_to_dict(fields[8])
-		
-		if "splice_site" in attrs:
-			splice_site = attrs["splice_site"][:4]
-			
+		if "splice_site" in entry.attrs:
 			#Add _C or _N depending on splice site
-			fields[2] += "_C" if splice_site in { "GTAG", "GCAG", "CTAC", "CTGC" } else "_N"
+			entry.type_ += "_C" if entry.attrs["splice_site"][:4] in CONV_SS else "_N"
 	
-	print('\t'.join(fields))
+	print(entry)

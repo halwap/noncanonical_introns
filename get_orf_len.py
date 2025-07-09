@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from extras import *
+from sequtils import max_orf_len
 
 ###############################################################################
 parser = ArgumentParser()
@@ -54,4 +54,4 @@ for gene in genes.values():
 	
 	
 	#Report the ORF length
-	print(f"{gene.name}\t{max_len}")
+	print(to_tsv(gene.name,max_len))

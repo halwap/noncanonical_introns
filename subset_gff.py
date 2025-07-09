@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from extras import *
+from formats import *
 
 ###############################################################################
 parser = ArgumentParser()
@@ -30,15 +30,14 @@ require_files( args.gff, args.list )
 
 
 #Deserialize list of features
-with ropen(args.list) as fd:
-	fts = set( line.rstrip() for line in fd )
+fts: set[str] = set( flatten_tsv(args.list) )
 
 
 #Loop over GFF records
-for fields in read_tsv(args.gff, '#'):
+for entry in parse_gff(args.gff):
 	
-	#Convert attributes to dictionary
-	attrs = attr_to_dict(fields[8])
+	#Get the attributes of this entry
+	attrs = entry.attrs
 	
 	
 	#If this is a child feature of a feature in the list, add it to the list
@@ -48,4 +47,4 @@ for fields in read_tsv(args.gff, '#'):
 	
 	#Report or not report the feature, depending on its status
 	if ( args.keep and attrs["ID"] in fts ) or ( not args.keep and attrs["ID"] not in fts ):
-		print('\t'.join(fields))
+		print(entry)

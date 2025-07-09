@@ -1,91 +1,7 @@
+#Type hints
+from typing import *
 
-from sys import stdout, stdin
-from typing import *					#type hints
-from contextlib import contextmanager
-from os.path import isfile				#file exists checks
 from itertools import batched
-
-
-def attr_to_dict(attrs: str) -> dict[str:str]:
-	"""
-	Convert a GFF record's attributes field to a dictionary
-	"""
-	attr_dict = {}
-	if not attrs or attrs == ".":
-		return attr_dict
-		
-	#Split into individual attributes
-	for attr in attrs.split(';'):
-		#Split key-value pairs
-		key, sep, value = attr.partition('=')
-		attr_dict[key] = value
-	
-	return attr_dict
-
-
-def read_tsv(path: str, comment_char: str = None, hlen: int = 0) -> list[str]:
-	"""
-	Take a TSV file and yield each line, broken into fields
-	The first `hlen' lines, and lines starting with `comment_char' are skipped
-	"""
-	with ropen(path) as fd:
-		# Skip initial lines if requested
-		for _ in range(hlen):
-			next(fd)
-		
-		for line in fd:
-			line = line.rstrip()
-			
-			#Skip comments
-			if comment_char and line.startswith(comment_char):
-				continue
-			
-			#Split to fields
-			yield line.split('\t')
-
-
-def require_files(*args):
-	"""
-	Given one or more paths, check if all of them exist as files, and raise an exception if not
-	"""
-	for file in args:
-		#Skip None and "-"
-		if file and file != "-" and not isfile(file):
-			raise FileNotFoundError(f"File {file} does not exist")
-
-
-def refuse_files(*args):
-	"""
-	Given one or more paths, check if none of them exist as files, and raise an exception if yes
-	"""
-	for file in args:
-		#Skip None and "-"
-		if file and file != "-" and isfile(file):
-			raise FileExistsError(f"File {file} already exists")
-
-
-@contextmanager
-def ropen(path: str) -> TextIO:
-	"""
-	Open a file for reading, or return a handle to stdin if `path' is "-"
-	"""
-	if path == "-":
-		yield stdin
-	else:
-		with open(path, 'r') as fd:
-			yield fd
-
-
-@contextmanager
-def wopen(path: str) -> TextIO:
-	"""
-	Open a file for writing, or return a handle to stdout if `path' is "-"
-	"""
-	if path == "-":
-		yield stdout
-	else:
-		with open(path, 'w') as fd:
-			yield fd
 
 
 def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
@@ -157,13 +73,6 @@ def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
 	
 	#If neither conditions passed, return False
 	return False
-
-
-def truncate_seqids(fasta: dict[str:str]) -> dict[str:str]:
-	"""
-	Given a deserialized FASTA file, truncate the sequence IDs to the first word
-	"""
-	return { seqid.partition(' ')[0]:seq for seqid,seq in fasta.items() }
 
 
 def max_orf_len(s: str) -> int:
