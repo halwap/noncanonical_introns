@@ -5,41 +5,37 @@ from libintrons import *
 from Bio.Align import PairwiseAligner
 
 ###############################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("gff", metavar="GFF",
-	help = "GFF file contatining annotation")
-
+					help = "GFF file to process",
+					type = str)
 parser.add_argument("genome", metavar="GENOME",
-	help = "FASTA file referenced by GFF")
-
+					help = "FASTA file referenced by GFF",
+					type = str)
 parser.add_argument("xcripts", metavar="XCRIPTS",
-	help = "FASTA file containing transcript sequences")
+					help = "FASTA file containing transcript sequences",
+					type = str)
 
-
-#Options
+#Flags
 parser.add_argument("-U", "--unstranded",
-	help = "Examine both strands",
-	action = "store_true")
-
+					help = "Examine both strands",
+					action = "store_true", default = False)
 parser.add_argument("-c", "--count",
-	help = "Report number of mismatches, instead of listing mismatches",
-	action = "store_true")
-
+					help = "Report number of mismatches only",
+					action = "store_true", default = False)
 parser.add_argument("-A", "--align",
-	help = "Report alignments in addition listing occurences",
-	action = "store_true")
-
+					help = "Report alignments in addition listing occurences",
+					action = "store_true", default = False)
 
 args = parser.parse_args()
 
-
-
 ###############################################################################
-#Check that all relevant input files exist
+
 require_files( args.gff, args.genome, args.xcripts )
+
 
 #Will hold number of mismatches found
 mismatch_cnt: int = 0

@@ -3,34 +3,29 @@
 from argparse import ArgumentParser
 from formats import *
 from itertools import combinations
-from sequtils import are_altseq
-
+from extras import are_altseq
 
 ###############################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("fasta", metavar="FASTA",
-	help = "FASTA file")
+					help = "FASTA file",
+					type = str)
 
-
-#Options
+#Flags
 parser.add_argument("-U", "--unstranded",
-	help = "Examine both strands",
-	default = False, action = "store_true")
-
+					help = "Examine both strands",
+					action = "store_true", default = False)
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",
-	help = "Minimal shared sequence length to count as altseq hit",
-	default = 1, type = int)
-
+					help = "Minimal shared sequence length to count as altseq hit",
+					type = int, default = 1)
 
 args = parser.parse_args()
 
-
-
 ###############################################################################
-#Check that all relevant input files exist
+
 require_files( args.fasta )
 
 

@@ -2,7 +2,6 @@
 
 from argparse import ArgumentParser
 from formats import *
-from libintrons import CONV_SS
 
 ###############################################################################
 
@@ -11,6 +10,9 @@ parser = ArgumentParser()
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
+					type = str)
+parser.add_argument("attr", metavar="ATTR",
+					help = "Name of attribute to extract",
 					type = str)
 
 args = parser.parse_args()
@@ -22,11 +24,6 @@ require_files( args.gff )
 
 #Loop over GFF records
 for entry in parse_gff(args.gff):
-	#If this record is an intron
-	if entry.type_ == "intron":
-		
-		if "splice_site" in entry.attrs:
-			#Add _C or _N depending on splice site
-			entry.type_ += "_C" if entry.attrs["splice_site"][:4] in CONV_SS else "_N"
-	
-	print(entry)
+	#If the entry possess the given attribute, report it
+	if args.attr in entry.attrs:
+		print(to_tsv( entry.attrs["ID"], entry.attrs[args.attr] ))

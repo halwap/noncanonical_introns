@@ -4,23 +4,21 @@ from argparse import ArgumentParser
 from libintrons import *
 
 ################################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("gff", metavar="GFF",
-	help = "GFF file contatining annotation")
-
+					help = "GFF file to process",
+					type = str)
 parser.add_argument("fasta", metavar="FASTA", nargs='?',
-	help = "FASTA file referenced by GFF")
-
+					help = "FASTA file referenced by GFF",
+					type = str)
 
 args = parser.parse_args()
 
-
-
 ################################################################################
-#Check that all relevant input files exist
+
 require_files( args.gff, args.fasta )
 
 

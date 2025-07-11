@@ -2,32 +2,30 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from sequtils import max_orf_len
+from extras import max_orf_len
 
 ###############################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("gff", metavar="GFF",
-	help = "GFF file to process")
+					help = "GFF file to process",
+					type = str)
 
 parser.add_argument("fasta", metavar="FASTA",
-	help = "FASTA file referenced by GFF")
+					help = "FASTA file referenced by GFF",
+					type = str)
 
-
-#Options
+#Flags
 parser.add_argument("-U", "--unstranded",
-	help = "Examine both strands",
-	default = False, action = "store_true")
-
+					help = "Examine both strands",
+					action = "store_true", default = False)
 
 args = parser.parse_args()
 
-
-
 ###############################################################################
-#Check that all relevant input files exist
+
 require_files( args.gff, args.fasta )
 
 

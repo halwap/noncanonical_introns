@@ -3,39 +3,35 @@
 from argparse import ArgumentParser
 from itertools import combinations
 from libintrons import *
-from sequtils import are_altseq
+from extras import are_altseq
 
 ###############################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("gff", metavar="GFF",
-	help = "GFF file to process")
-
-parser.add_argument("groups", metavar="GROUPS",
-	help = "File with gene groups")
-
+					help = "GFF file to process",
+					type = str)
 parser.add_argument("fasta", metavar="FASTA",
-	help = "FASTA file referenced by GFF")
+					help = "FASTA file referenced by GFF",
+					type = str)
+parser.add_argument("groups", metavar="GROUPS", nargs='?',
+					help = "File with gene groups",
+					type = str)
 
-
-#Options
+#Flags
 parser.add_argument("-U", "--unstranded",
-	help = "Examine both strands",
-	default = False, action = "store_true")
-
+					help = "Examine both strands",
+					action = "store_true", default = False)
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",
-	help = "Minimal shared sequence length to count as altseq hit",
-	default = 1, type = int)
-
+					help = "Minimal shared sequence length to count as altseq hit",
+					type = int, default = 1)
 
 args = parser.parse_args()
 
-
-
 ###############################################################################
-#Check that all relevant input files exist
+
 require_files( args.gff, args.fasta, args.groups )
 
 
@@ -47,8 +43,12 @@ for gene in genes.values():
 	gene.fixup_exons()
 	gene.add_seqs(genome, "te")
 
-#Deserialize gene groups
-groups: list[set[str]] = [ set( gene_ids ) for gene_ids in parse_tsv(args.groups) ]
+
+#Deserialize gene groups if it was passed, or put all genes in the GFF into a single group
+if args.groups:
+	groups: list[list[str]] = list[ parse_tsv(args.groups) ]
+else:
+	groups: list[Iterable[str]] = [ genes.keys() ]
 
 
 for group in groups:

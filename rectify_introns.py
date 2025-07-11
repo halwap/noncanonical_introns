@@ -2,64 +2,53 @@
 
 from argparse import ArgumentParser
 from libintrons import *
-from os.path import realpath, dirname
-from extras import *
-from formats import *
+from pathlib import Path
 
 ###############################################################################
+
 parser = ArgumentParser()
 
-
-#Positional arguments: input and output files
+#Positional arguments
 parser.add_argument("gff", metavar="GFF",
-	help = "GFF file contatining annotation")
-
+					help = "GFF file to process",
+					type = str)
 parser.add_argument("fasta", metavar="FASTA",
-	help = "FASTA file referenced by GFF")
-
+					help = "FASTA file referenced by GFF",
+					type = str)
 parser.add_argument("outfile", metavar="OUTFILE",
-	help = "File to write rectified annotation to")
-
+					help = "File to write rectified annotation to",
+					type = str)
 parser.add_argument("stats", metavar="STATS", nargs='?',
-	help = "File to write intron statistics to")
-
-
+					help = "File to write intron statistics to",
+					type = str)
 
 #Options
 parser.add_argument("-n", "--nonconv", metavar="MODEL",
-	help = "Model for scoring nonconventionality",
-	default = dirname(realpath(__file__)) + "/Models/29_11_K_model.sav")
-
+					help = "Model for scoring nonconventionality",
+					type = str, default = Path(__file__).parent / "Models/29_11_K_model.sav")
 parser.add_argument("-c", "--conv", metavar="MODEL",
-	help = "Model for scoring conventionality",
-	default = dirname(realpath(__file__)) + "/Models/29_11_NK_model.sav")
-
+					help = "Model for scoring conventionality",
+					type = str, default = Path(__file__).parent / "Models/29_11_NK_model.sav")
 parser.add_argument("-f", "--force",
-	help = "Force overwriting of generated file(s) if they exist",
-	action = "store_true")
-
+					help = "Force overwriting of generated file(s) if they exist",
+					action = "store_true", default = False)
 parser.add_argument("-E", "--min-exon-len", metavar="LEN",
-	help = "The shortest an exon can become as a result of intron shifting",
-	default = 1, type = int)
-
+					help = "The shortest an exon can become as a result of intron shifting",
+					type = int, default = 1)
 parser.add_argument("-b", "--batch-size", metavar="SIZE",
-	help = "Score introns in batches of this size to reduce peak memory usage",
-	default = 0, type = int)
-
+					help = "Score introns in batches of this size to reduce peak memory usage",
+					type = int, default = 0)
 parser.add_argument("-C", "--force-conv-variants",
-	help = "Unconditionally prefer variants with conventional splice sites",
-	default = False, action = "store_true")
-
+					help = "Unconditionally prefer variants with conventional splice sites",
+					action = "store_true", default = False)
 parser.add_argument("-U", "--unweighted-pairing-scores",
-	help = "Use unweighted pairing scores in intron scoring",
-	default = False, action = "store_true")
-
+					help = "Use unweighted pairing scores in intron scoring",
+					action = "store_true", default = False)
 
 args = parser.parse_args()
 
-
-
 ###############################################################################
+
 #Check that all relevant input files exist
 require_files( args.gff, args.fasta, args.nonconv, args.conv )
 

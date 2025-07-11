@@ -265,7 +265,7 @@ class Gene(GenomicSequence):
 			f"Exons of {self} unlinked"
 	
 	
-	def add_seqs(self, genome: dict[str:str], which: str|set[str] = "gtei"):
+	def add_seqs(self, genome: dict[str,str], which: str|set[str] = "gtei"):
 		"""
 		Given a deserialized fasta file, build the sequences of the gene/exons/introns
 		`which' determines which specific features should obtain new sequences
@@ -863,7 +863,7 @@ class Intron(GenomicSequence):
 	nc_score:    float|None
 	unif_score:  float|None
 	splice_site: str|None
-	trais:       dict[str:bool|float]
+	trais:       dict[str,bool|float]
 
 
 	def __init__(
@@ -1185,7 +1185,7 @@ class Intron(GenomicSequence):
 		#Instantiate trait dictionary
 		#Traits are bools (informing if a given trait is present), with the exception of pairing
 		#scores, which are floats
-		self.traits: dict[str:bool|float] = {}
+		self.traits: dict[str,bool|float] = {}
 		
 		
 		#Last nucleotide of previous exon is a pyrimidine
@@ -1574,17 +1574,17 @@ class Intron(GenomicSequence):
 #   DESERIALIZATION
 ###################################################################################################
 
-def deserialize_gff(path: str) -> dict[str:Gene]:
+def deserialize_gff(path: str) -> dict[str,Gene]:
 	"""
 	Given a path to a GFF file, deserialize it to a dictionary containing all "gene" features
 	listed therein, with each gene's "mRNA" & "exon" feature(s) linked to it
 	"""	
 	#Dict of created genes
-	genes: dict[str:Gene] = {}
+	genes: dict[str,Gene] = {}
 	#List containing info about exons to be created after parsing the whole file
 	deferred_exons: list[tuple] = []
 	#Table for converting from transcript IDs to gene IDs
-	mrna_to_gene: dict[str:str] = {}
+	mrna_to_gene: dict[str,str] = {}
 	
 	
 	#for scaffold, source, type_, start, end, strand, 
@@ -1673,7 +1673,7 @@ def deserialize_gff(path: str) -> dict[str:Gene]:
 #A-T: 0.5, C-G: 1.0, G-T: 0.375.
 #Non-pairing nucleotide pairs have an implicit weight of 0.0.
 #For commutativity, each pairing pair is present in this dictionary in both orders.
-PAIR_WEIGHTS: dict[tuple[str,str]:float] = {
+PAIR_WEIGHTS: dict[tuple[str,str],float] = {
 	('A','T'): 0.5,   ('T','A'): 0.5,
 	('G','C'): 1.0,   ('C','G'): 1.0,
 	('G','T'): 0.375, ('T','G'): 0.375

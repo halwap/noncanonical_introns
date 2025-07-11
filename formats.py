@@ -209,7 +209,7 @@ class GFF:
 	
 	
 	@staticmethod
-	def attr_to_dict(attrs: str) -> dict[str:str]:
+	def attr_to_dict(attrs: str) -> dict[str,str]:
 		"""
 		Convert an attributes field to a dictionary
 		"""
@@ -227,7 +227,7 @@ class GFF:
 	
 	
 	@staticmethod
-	def dict_to_attr(attrs: dict[str:str]) -> str:
+	def dict_to_attr(attrs: dict[str,str]) -> str:
 		"""
 		Convert a dictionary to an attributes field as a single string
 		"""
@@ -250,6 +250,41 @@ class GFF:
 	#		setattr(self, key, value)
 	#	else:
 	#		self.attrs[key] = value
+	
+	
+	def orphan(self, *, backup: bool = True):
+		"""
+		Remove the Parent attribute of an entry, if it has one
+		If `backup' is True, the parent's ID will be backed up as the "former_parent" attribute
+		"""
+		if "Parent" in self.attrs:
+			if backup:
+				self.attrs["former_parent"] = self.attrs["Parent"]
+			del self.attrs["Parent"]
+	
+	
+	def adopt(self, id_: str, *, backup: bool = True):
+		"""
+		Set the Parent attribute of an entry
+		If `backup' is True, the previous parent's ID will be backed up as the "former_parent"
+		attribute
+		"""
+		if "Parent" in self.attrs and backup:
+			self.attrs["former_parent"] = self.attrs["Parent"]
+		self.attrs["Parent"] = id_
+	
+	
+	def overlaps(self, other: Self, *, unstranded: bool = False) -> bool:
+		"""
+		Determine if a pair of entries have any overlap between each other
+		If `unstranded' is False, the entries must have the same strand to count as overlapping
+		"""
+		#Check that the entries have the same strand, if `unstranded' is False
+		if not unstranded and self.strand != other.strand:
+			return False
+		
+		#Check for overlap
+		return self.seqid == other.seqid and self.start <= other.end and other.start <= self.end
 
 
 def parse_gff(path: str) -> Iterator[GFF]:
@@ -267,7 +302,7 @@ def parse_gff(path: str) -> Iterator[GFF]:
 #	OTHER FORMATS
 ###################################################################################################
 
-def deserialize_fasta(path: str, trunc: bool = False) -> dict[str:str]:
+def deserialize_fasta(path: str, trunc: bool = False) -> dict[str,str]:
 	"""
 	Given a path to a FASTA file, deserialize it to a dictionary
 	If `trunc' is True, the sequence identifiers will be truncated to only the first word

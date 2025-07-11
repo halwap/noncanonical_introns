@@ -1,7 +1,9 @@
 #Type hints
 from typing import *
 
-from itertools import batched
+from collections import defaultdict
+from itertools import chain, batched
+
 
 
 def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
@@ -75,6 +77,7 @@ def are_altseq(s1: str, s2: str, n: int = 1) -> bool:
 	return False
 
 
+
 def max_orf_len(s: str) -> int:
 	"""
 	Examine the ORFs of a nucleotide sequence and return the length of the longest ORF
@@ -118,3 +121,88 @@ def max_orf_len(s: str) -> int:
 	
 	
 	return max_len
+
+
+
+
+def merge_sets(sets: Collection[Collection[Hashable]]) -> list[set[Hashable]]:
+	"""
+	Given a set of sets, merge ones which have elements in common, and return a set of completely
+	disjoint sets
+	"""
+	#This dictionary's keys are all the unique items across all sets in `sets'
+	#Each value is the given key's parent
+	parents: dict[Hashable,Hashable] = {}
+	
+
+	#Populate `parents' by iterating through all items across all sets
+	for item in chain.from_iterable(sets):
+		#Initially, each item is its own parent
+		parents[item] = item
+	
+	
+	def find_root(item: Hashable) -> Hashable:
+		"""
+		Find the root of an item, i.e. its great-great-great-...-grandparent
+		Also automatically shortens the path through `parents' from `item' to its root
+		"""
+		while parents[item] != item:
+			parents[item] = parents[parents[item]]
+			item = parents[item]
+		return item
+	
+	
+	#Modify `parents' such that if two items come from the same set, they have the same root
+	for set_ in sets:
+		#Skip single-element & empty sets
+		if len(set_) > 1:
+			
+			set_: Iterator[Hashable] = iter(set_)
+			
+			
+			#Get the first (in practice, arbitrary) item of `set_', along with its root
+			item1: Hashable = next(set_)
+			root1: Hashable = find_root(item1)
+			
+			
+			#Iterate through the remaining items in `set_'
+			for item2 in set_:
+				#Get the root of the other item
+				root2: Hashable = find_root(item2)
+				
+				#Daisy chain the tree that `item2' is in, to the tree that `item1' is in
+				#This effectively merges these two trees, albeit the resultant tree is potentially
+				#unbalanced
+				if root1 != root2:
+					parents[root2] = root1
+	
+	
+	#Group items into new sets, such that all items with the same root are in one set
+	merged_sets: dict[Hashable,set[Hashable]] = defaultdict(set)
+	for item in parents:
+		merged_sets[ find_root(item) ].add(item)
+	
+	return list( merged_sets.values() )
+
+
+
+def max_of_each(*iters: Iterable[Any], key: Callable = lambda x: x) -> Iterator[Any]:
+	"""
+	Given multiple iterables, find the max-valued item in each iterable, and yield that item
+	Like with max(), a custom function to apply on each may be supplied with the `key' argument
+	To use with an iterable of iterables, unpack it: max_of_each(*iter_of_iters)
+	"""
+	for iter_ in iters:
+		yield max(iter_, key=key)
+
+
+def min_of_each(*iters: Iterable[Any], key: Callable = lambda x: x) -> Iterator[Any]:
+	"""
+	Given multiple iterables, find the min-valued item in each iterable, and yield that item
+	Like with min(), a custom function to apply on each may be supplied with the `key' argument
+	To use with an iterable of iterables, unpack it: min_of_each(*iter_of_iters)
+	"""
+	for iter_ in iters:
+		yield min(iter_, key=key)
+
+

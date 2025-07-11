@@ -9,10 +9,10 @@ libintrons.py
 	Chiefly includes the GenomicSequence class (& subclasses), as well as
 	functions for deserializing GFF files to GenomicSequence subclasses and
 	scoring	introns
-	Indirectly import formats.py
+	Itself import formats.py
 
-sequtils.py
-	Module containing one-off functions for examining nucleotide sequences
+extras.py
+	Module containing one-off functions for various bespoke operations
 
 
 
@@ -23,32 +23,54 @@ add_introns.py
 	If the GFF's referened FASTA is supplied, the introns will have their
 	splice sites denoted under the "splice_site" attribute
 
-find_altseq_gff.py
-	Given a GFF+FASTA and a file containing grouped genes, find pairs of
-	transcript sequences which came from the same transcript
+apply_adoptions.py
+	Given the output of prepare_adoptions.py and a GFF, apply the adoptions
+	listed
+
+extract_attrib.py
+	Given a GFF and the name of an attribute, extract and list the value of
+	that attribute for every feature which has that attribute
 
 find_altseq_fa.py
-	Like find_altseq_fa.py, but takes only a FASTA file as input, and
-	compares  unique pairs of sequences in the file
+	Given a FASTA, find pairs of sequences which may originate from the
+	same sequenced transcript
+
+find_altseq_gff.py
+	Given a GFF+FASTA, find pairs of transcript mapping which may originate
+	from the same sequenced transcript
+	By default, each unique pair of transcript mappings is checked; pass
+	the output of group_features.py to only compare mappings if they
+	overlap
 
 find_mrna_mismatches.py
 	Given a transcriptome-to-genome mapping GFF, a genome FASTA and a
 	transcriptome FASTA, find mappings whose sequences do not match the
 	original transcript sequence
 
+get_ft_len.py
+	Given a GFF, report the length of each feature
+
 get_orf_len.py
 	Given a GFF & FASTA, report the length of each transcript's longest ORF
 
-rectify_introns.py
-	Given a GFF & FASTA, find and score all intron variants, then select
-	the  variant for each intron
-
-get_gene_scores.py
-	Report the "avg_intron_score" attribute for every gene in a GFF file
+group_features.py
+	Given a GFF, group features based on if they overlap one another
 
 introns_corn.py
 	Given a GFF, mark each intron possessing a "splice_site" attribute as
 	conventional or nonconventional, based on the splice site sequence
+
+prepare_adoptions.py
+	Given the output of find_altseq_gff.py and the output of get_ft_len.py,
+	determine which transcript mappings collectively originate from the
+	same sequenced transcript, and find the most representative mapping
+	for each group
+	Based on this, prepare a file describing adoptions, to serve as input
+	for apply_adoptions.py
+
+rectify_introns.py
+	Given a GFF & FASTA, find and score all intron variants, then select
+	the  variant for each intron
 
 subset_gff.py
 	Given a GFF & a list of feature IDs, subset the GFF file to
