@@ -95,13 +95,20 @@ phase("Rectify introns")
 for gene in genes:
 	gene.rectify_introns()
 
-phase("Re-link exons")
-for gene in genes:
-	gene.fixup_exons()
 
-phase("Re-add seqs")
-for gene in genes:
-	gene.add_seqs(genome, "ei")
+#Re-linking exons and renewing sequences is not necessary at this point in time; they are included
+#here, as this script is partly meant as a reference example for using libintrons
+#Additionally, calling add_seqs() with "ei" is valuable, as it will verify that the intron
+#verification did not alter the sequence of the gene or transcript
+#For these reasons, these operations are only carried out if asserts are enabled
+if __debug__:
+	phase("Re-link exons")
+	for gene in genes:
+		gene.fixup_exons()
+	
+	phase("Re-add seqs")
+	for gene in genes:
+		gene.add_seqs(genome, "ei")
 
 
 #Serialize all genes

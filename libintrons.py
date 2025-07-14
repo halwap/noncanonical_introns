@@ -18,8 +18,6 @@ from statistics import mean
 #Third-party imports
 #Retrieving seqs from the '-' strand
 from Bio.Seq import reverse_complement
-#Convenient iteration
-from more_itertools import roundrobin
 #Array processing
 from numpy import array, append, empty, argmax
 
@@ -49,36 +47,44 @@ class GenomicSequence:
 		start:    int,
 		end:      int,
 		*,
-		strand:   Strand   = '.',
+		strand:   Strand,
 		seq:      str|None = None
 	):
 		self.scaffold = scaffold
 		
 		
 		#Validate coordinates
-		assert start < end, \
-			f"Bad coords: start: {start}, end: {end}"
+		assert start < end
 		
 		self.start = start
 		self.end   = end
 		
 		
 		#Validate strand
-		assert strand in set("+-."), \
-			f"Bad strand: {strand} is not one of '+', '-', or '.'"
+		assert strand in "+-."
 		
 		self.strand = strand
 		
 		
 		#Validate sequence length vis-a-vis passed coords
 		if seq:
-			assert len(seq) == end - start, \
-				f"Length mismatch: {len(seq)} by seq, {end - start} by coords"
+			assert len(seq) == end - start
+		
 		self.seq = seq
+	
+	
+	def valid_len(self):
+		"""
+		Check if the `start' and `end' attributes "agree" with the `seq' attribute about the length
+		of the sequence
+		"""
+		assert self.seq
+		return len(self.seq) == self.end - self.start
 	
 	
 	def __bool__(self) -> bool:
 		return True
+
 	
 	
 	#Report type and position of sequence
@@ -97,9 +103,11 @@ class GenomicSequence:
 	def __len__(self):
 		"""
 		Get length of sequence
+		Assumes the sequence is present
 		"""
-		return len(self.seq) if self.seq else self.end - self.start
+		return len(self.seq)
 	
+
 	def __getitem__(self, index: int|slice):
 		"""
 		Index and slice nucleotides of sequence
@@ -130,17 +138,8 @@ class GenomicSequence:
 		else:
 			raise TypeError(f"Can't concatenate {type(other).__name__} & {type(self).__name__}")
 	
-
-	@staticmethod
-	def concat(iterable: Iterable[GenomicSequence], sep: str = '') -> str:
-		"""
-		Given an iterable of GenomicSequence instances (subclasses also ok), extract the sequences
-		of each one and concatenate them, with an optional separator between each sequence
-		"""
-		return sep.join( map( attrgetter("seq"), iterable ) )
 	
-
-	#Comparisons for checking strand, scaffold and relative position of two GenomicSequence objects
+	#Methods for checking the relative position of two GenomicSequence objects
 	def comparable(self, other: Self) -> bool:
 		"""
 		Check whether two GenomicSequence objects are from the same strand & scaffold
@@ -153,27 +152,27 @@ class GenomicSequence:
 		Check whether a GenomicSequence is entirely to the right of `self', without flushed borders
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.comparable(other) and self.start < self.end < other.start < other.end
+		return self.comparable(other) and self.end < other.start
 	
 	def __le__(self, other: Self) -> bool:
 		"""
 		Check whether a GenomicSequence is entirely to the right of `self', with flushed borders
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.comparable(other) and self.start < self.end == other.start < other.end
+		return self.comparable(other) and self.end == other.start
 	
 	def __contains__(self, other: Self) -> bool:
 		"""
 		Check whether `self' completely overlaps another GenomicSequence
 		Comparison is only relevant if both objects are from the same scaffold & strand
 		"""
-		return self.comparable(other) and self.start <= other.start < other.end <= self.end
+		return self.comparable(other) and self.start <= other.start and other.end <= self.end
 	
 	def __eq__(self, other: Self) -> bool:
 		"""
 		Check whether two GenomicSequence objects have the same coordinates, scaffold & strand
 		"""
-		return self.comparable(other) and self.start == other.start < other.end == self.end
+		return self.comparable(other) and self.start == other.start and other.end == self.end
 	
 	
 	def to_gff(self, type_: str = "sequence_feature", **attrs: str) -> GFF:
@@ -199,9 +198,6 @@ class GenomicSequence:
 					phase  = None,
 					attrs  = attrs
 			)
-	
-	
-
 
 
 
@@ -239,90 +235,83 @@ class Gene(GenomicSequence):
 	
 	def fixup_exons(self):
 		"""
-		When exons are pushed as-is to Gene.exons, they might not necessarily be sorted
-		ordered and linked to one another -  this methods applies the necessary fixes
+		Appropriately sort and link the exons in self.exons
 		"""
 		#If there's no exons, or only 1 exon, there's nothing to do
 		if len(self.exons) < 2:
 			return
 		
-		#Sort exons by position
+		#Sort exons by start position
+		#If the gene is on the positive strand, this is also sorting them by their within-gene
+		#order; if negative, however, they are sorted in reversed within-gene order
 		self.exons.sort(key=attrgetter("start"))
 		
 		#Validate coordinates
-		assert self.valid_coords(), \
-			f"Exons of {self} have bad coords"
+		assert self.valid_coords()
 		
 		
 		#Link exons
-		for left_exon, right_exon in pairwise(self.exons):
-			left_exon.next_exon = right_exon
-			right_exon.prev_exon = left_exon
+		for exon1, exon2 in pairwise(self.exons):
+			exon1.next_exon = exon2
+			exon2.prev_exon = exon1
 		
 		
 		#Validate linkage
-		assert self.valid_links(), \
-			f"Exons of {self} unlinked"
+		assert self.valid_links()
 	
 	
-	def add_seqs(self, genome: dict[str,str], which: str|set[str] = "gtei"):
+	def add_seqs(self, genome: dict[str,str], which: str = "gtei"):
 		"""
 		Given a deserialized fasta file, build the sequences of the gene/exons/introns
 		`which' determines which specific features should obtain new sequences
 		By default, all 3 features (gene, exons & introns) will get new seqs
 		"""
-		def maybe_rc(seq: str) -> str:
-			"""
-			Get the reverse complement of a seq, if the strand of the gene necessitates it
-			"""
-			return reverse_complement(seq) if self.strand == '-' else seq
+		#Define lambda for obtaining the proper orientation of a sequence
+		if self.strand == '-':
+			orient: Callable[[str],str] = lambda seq: reverse_complement(seq)
+		else:
+			orient: Callable[[str],str] = lambda seq: seq
 		
 		
 		#Validate coordinates
-		assert self.valid_coords(), \
-			f"Exons/introns of {self} have bad coords"
+		assert self.valid_coords()
 		
 		
 		#Get sequence of appropriate scaffold
 		#This requires the gene's scaffold to be present in the genome
-		assert self.scaffold in genome, \
-			f"Scaffold of {self} not in genome"
-		scaffold_seq = genome[self.scaffold]
+		assert self.scaffold in genome
+		scaffold_seq: str = genome[self.scaffold]
 		
 		
 		#Push sequence to gene
 		if 'g' in which:
-			self.seq = maybe_rc(scaffold_seq[self.start:self.end])
-			assert len(self) == self.end - self.start, \
-				f"{self}: bad length, {len(self)} vs {self.end - self.start}"
+			self.seq = orient(scaffold_seq[self.start:self.end])
+			assert self.valid_len()
 		
 		
 		#Push sequence to transcript
 		if 't' in which:
 			self.transcript.seq = ""
-			for exon in self.ordered_exons():
-				self.transcript.seq += maybe_rc(scaffold_seq[exon.start:exon.end])
+			for exon in self.order_exons():
+				self.transcript.seq += orient(scaffold_seq[exon.start:exon.end])
 		
 		
 		#Push sequences to exons
 		if 'e' in which:
 			for exon in self.exons:
-				exon.seq = maybe_rc(scaffold_seq[exon.start:exon.end])
-				assert len(exon) == exon.end - exon.start, \
-					f"{exon} in {self}: bad length, {len(exon)} vs {exon.end - exon.start}"
+				exon.seq = orient(scaffold_seq[exon.start:exon.end])
+				assert exon.valid_len()
 		
 		
 		#Push sequences to introns
 		if 'i' in which:
 			for intron in self.introns:
-				intron.seq = maybe_rc(scaffold_seq[intron.start:intron.end])
-				assert len(intron) == intron.end - intron.start, \
-					f"{intron} in {self}: bad length, {len(intron)} vs {intron.end - intron.start}"
-		
+				intron.seq = orient(scaffold_seq[intron.start:intron.end])
+				assert intron.valid_len()
+
 		
 		#Validate created sequences
-		assert self.valid_seqs(), \
-			f"Seq of {self} differs from joint seq of constituent features"
+		assert self.valid_seqs()
 	
 	
 	def add_introns(self):
@@ -330,14 +319,11 @@ class Gene(GenomicSequence):
 		Populate self.introns by inserting an intron between every pair of exons
 		"""
 		#Check that there are exons at all
-		assert len(self.exons) > 0, \
-			f"{self} has no exons"
+		assert len(self.exons) > 0
 		
 		#Validate coordinates & linkage
-		assert self.valid_coords(), \
-			f"Exons of {self} have bad coords"
-		assert self.valid_links(), \
-			f"Exons of {self} unlinked"
+		assert self.valid_coords()
+		assert self.valid_links()
 		
 
 		#If there's only one exon, there are no introns to add; exit early
@@ -348,30 +334,33 @@ class Gene(GenomicSequence):
 		self.introns = []
 		
 		
-		for left_exon, right_exon in pairwise(self.exons):
+		for exon1, exon2 in pairwise(self.exons):
 
 			#Get coordinates of the intron
-			start = left_exon.end
-			end = right_exon.start
+			start = exon1.end
+			end   = exon2.start
 			
 			#Instantiate intron & add it to the list
 			self.introns.append(
 				Intron(
 					self.scaffold, start, end, strand = self.strand,
-					gene = self, prev_exon = left_exon, next_exon = right_exon
+					gene = self, prev_exon = exon1, next_exon = exon2
 				)
 			)
+			
+			#Validate linkage & coords between the new intron & exons
+			#There's no linkage check between exon1 & exon2, but that's ok, since the
+			#self.valid_links() asserts above already did that
+			assert exon1 <= self.introns[-1] <= exon2
+			assert exon1 @ self.introns[-1] @ exon2
 		
 		
 		#Check exon & intron count
-		assert len(self.exons) == len(self.introns) + 1, \
-			f"{self} has {len(self.exons)} exons, but {len(self.introns)} introns"
+		assert len(self.exons) == len(self.introns) + 1
 		
 		#Validate coords & linkage, this time with introns
-		assert self.valid_coords(), \
-			f"Exons/introns of {self} have bad coords"
-		assert self.valid_links(), \
-			f"Exons/introns of {self} unlinked"
+		assert self.valid_coords()
+		assert self.valid_links()
 	
 	
 	def add_intron_variants(self, min_exon_len: int):
@@ -387,23 +376,24 @@ class Gene(GenomicSequence):
 		Rectify all introns in the gene by selecting the highest-scored variant for each one.
 		Assumes introns have been scored already.
 		"""
-		
 		#This method should do nothing if the gene has no introns
 		if len(self.introns) == 0:
 			return
 		
 		#Check that all introns have been scored
-		assert all( intron.unif_score != None for intron in self.introns ), \
-			f"{self} has unscored intron(s)"
+		assert all( intron.scored() for intron in self.introns )
 		
-
+		#Validate coords & linkage
+		assert self.valid_coords()
+		assert self.valid_links()
+		
+		
 		for intron_idx, intron in enumerate(self.introns):
 			#Skip introns without variants
 			if intron.variants:
 				
 				#Check that all variants of this intron have been scored
-				assert all( variant.unif_score != None for variant in intron.variants ), \
-					f"{intron} of {self} has unscored variant(s)"
+				assert all( variant.scored() for variant in intron.variants )
 				
 				
 				#Get index of variant with highest score
@@ -413,7 +403,6 @@ class Gene(GenomicSequence):
 				#If the highest-scored variant supersedes the base intron, supplant it
 				if intron.variants[best_variant_idx].unif_score > intron.unif_score:
 					self.swap_intron_and_variant(intron_idx, best_variant_idx)
-		
 		
 		
 		#With the best variant selected for each intron, the exons need also be switched, so that
@@ -426,44 +415,37 @@ class Gene(GenomicSequence):
 		
 		#The left and right boundaries of each medial exon were nudged independently, and so may
 		#need to be reconciled
-		for exon_idx, (left_intron, right_intron) in enumerate(pairwise(self.introns), 1):
-			if not left_intron < right_intron:
+		for exon_idx, (intron1, intron2) in enumerate(pairwise(self.introns), 1):
+			if not intron1 < intron2:
 				raise ValueError("Vanishing exon found, try increasing minimum exon length")
 			
 			
 			#If the introns disagree on the exon between them, reconciliation is necessary
-			if left_intron.next_exon != right_intron.prev_exon:
+			if intron1.next_exon != intron2.prev_exon:
 				
-				#Reconciliation is done by having the left & right introns dictate the start & end
+				#Reconciliation is done by having the two introns dictate the new start & end
 				#of the exon, respectively
-				left_intron.next_exon.end = right_intron.prev_exon.end
+				intron1.next_exon.end = intron2.prev_exon.end
 				
 				
-				#Link new exon & right intron (left exon & intron are already linked)
-				right_intron.prev_exon = left_intron.next_exon
-				left_intron.next_exon.next_intron = right_intron
+				#Link new exon & secons intron (first exon & intron are already linked)
+				intron2.prev_exon = intron1.next_exon
+				intron1.next_exon.next_intron = intron2
 
 			
 			#At this point, the introns should agree on the exon between them, either naturally, or
 			#thanks to reconciliation
-			assert left_intron.next_exon == right_intron.prev_exon, \
-				f"{left_intron} & {right_intron} disagree on their in-between exon, respectively"
+			#Note that `intron1.next_exon' and `intron2.prev_exon' might not necessarily be the
+			#same object, they just need to have identical coordinates
+			assert intron1.next_exon == intron2.prev_exon
 			
 			#Replace exon in list
-			self.exons[exon_idx] = left_intron.next_exon
+			self.exons[exon_idx] = intron1.next_exon
 			
 
-			#Check linkage
-			assert left_intron @ self.exons[exon_idx], \
-				f"{left_intron} & {self.exons[exon_idx]} of {self} unlinked"
-			assert self.exons[exon_idx] @ right_intron, \
-				f"{self.exons[exon_idx]} & {right_intron} of {self} unlinked"
-			
-			#Check coordinates (intron-exon only, since introns were checked already)
-			assert left_intron <= self.exons[exon_idx], \
-				f"{left_intron} & {self.exons[exon_idx]} of {self} not flush"
-			assert self.exons[exon_idx] <= right_intron , \
-				f"{self.exons[exon_idx]} & {right_intron} of {self} not flush"
+			#Check linkage & coordinates between the exon and the introns
+			assert intron1 @ self.exons[exon_idx]  @ intron2
+			assert intron1 <= self.exons[exon_idx] <= intron2
 	
 	
 	def swap_intron_and_variant(self, intron_idx: int, variant_idx: int):
@@ -472,30 +454,23 @@ class Gene(GenomicSequence):
 		them around.
 		"""
 		#Validate input
-		assert intron_idx < len(self.introns), \
-			f"Attempting to swap nonexistent intron of {self}"
-				
-		#Get the base intron
+		assert intron_idx < len(self.introns)
+		
+		#Get the base intron & the variant
 		intron: Intron = self.introns[intron_idx]
-		
-		
-		#Validate input
-		assert variant_idx < len(intron.variants), \
-			f"Attempting to swap nonexistent variant of {intron} of {self}"
-		
-		#Get the variant
 		variant: Intron = intron.variants[variant_idx]
 		
+		#Validate input
+		assert variant_idx < len(intron.variants)
 		
-		#Make `intron' a variant
+
+		#Replace `variant' with `intron' in both lists
 		intron.variants[variant_idx] = intron
+		self.introns[intron_idx] = variant
 		
 		#Repossess the list of variants
 		variant.variants = intron.variants
 		del intron.variants
-		
-		#Make `variant' a base intron
-		self.introns[intron_idx] = variant
 	
 	
 	def to_gff(self) -> list[GFF]:
@@ -503,32 +478,27 @@ class Gene(GenomicSequence):
 		Convert a Gene and all its children features to a list of GFF instances
 		"""
 		#Validate coordinates
-		assert self.valid_coords(), \
-			f"Exons/introns of {self} have bad coords"
+		assert self.valid_coords()
 		
 		#Check that both the gene and the transcript have names to use as their IDs in the GFF
-		assert self.name, \
-			f"{self} lacks a name"
-		assert self.transcript.name, \
-			f"{self.transcript} lacks a name"
+		assert self.name
+		assert self.transcript.name
 		
 		
 		#Will hold converted entries
 		entries: list[GFF] = []
 		
 		#Detemine whether all introns of the gene have been scored
-		introns_scored = self.introns and all(intron.unif_score != None for intron in self.introns)
+		introns_scored = self.introns and all(intron.scored() for intron in self.introns)
 		
 		
 		#Gene
-		
+		attrs = { "ID": self.name }
 		#If all introns have been scored, report the average score in attributes
 		if introns_scored:
-			score = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
-			entries.append( super().to_gff("gene", ID=self.name, avg_intron_score=score) )
-		#Otherwise, report only the gene's ID
-		else:
-			entries.append( super().to_gff("gene", ID=self.name) )
+			attrs["score"] = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
+		
+		entries.append( super().to_gff("gene", **attrs) )
 		
 		
 		#Transcript
@@ -551,8 +521,8 @@ class Gene(GenomicSequence):
 			
 			#Report scores if available
 			if introns_scored:
-					attrs["conv_score"] = str(intron.c_score)
-					attrs["nonconv_score"] = str(intron.nc_score)
+				attrs["conv_score"] = str(intron.c_score)
+				attrs["nonconv_score"] = str(intron.nc_score)
 			
 			entries.append( intron.to_gff("intron", **attrs) )
 		
@@ -560,34 +530,37 @@ class Gene(GenomicSequence):
 		return entries
 	
 	
-	def ordered_exons(self) -> Iterable[Exon]:
+	def frags(self) -> list[Exon|Intron]:
 		"""
-		Returns an iterable of exons, sorted by order within gene, not position
+		Returns a list of interpersed exons & introns
 		"""
-		#Check all exons are ordered
-		assert self.valid_coords(), \
-			f"Exons of {self} have bad coords"
-		
-		#Return the exons, ordered as they are within the gene
-		if self.strand == '-':
-			return reversed( self.exons )
-		else:
-			return self.exons
+		out = []
+		for exon, intron in zip(self.exons, self.introns):
+			out.append(exon)
+			out.append(intron)
+		out.append(self.exons[-1])
+		return out
 	
 	
-	def ordered_exons_and_introns(self) -> Iterable[Exon|Intron]:
+	def order_exons(self) -> Iterable[Exon]:
 		"""
-		Returns an iterable of interspersed exons & introns, sorted by order within gene, not
-		position
+		Returns an iterable of exons in within-gene order
 		"""
-		assert self.valid_coords(), \
-			f"Exons/introns of {self} have bad coords"
-		
-		#Intersperse exons & introns, reversing their order if needed
-		if self.strand == '-':
-			return roundrobin( reversed(self.exons), reversed(self.introns) )
-		else:
-			return roundrobin( self.exons, self.introns)
+		return reversed(self.exons) if self.strand == '-' else self.exons
+	
+	
+	def order_introns(self) -> Iterable[Intron]:
+		"""
+		Returns an iterable of introns in within-gene order
+		"""
+		return reversed(self.introns) if self.strand == '-' else self.introns
+	
+	
+	def order_frags(self) -> Iterable[Exon|Intron]:
+		"""
+		Returns an iterable of interspersed exons & introns in within-gene order
+		"""
+		return reversed(self.frags()) if self.strand == '-' else self.frags()
 	
 	
 	def valid_coords(self) -> bool:
@@ -611,32 +584,28 @@ class Gene(GenomicSequence):
 				return False
 
 			#Check that all exons are properly ordered, and there are gaps between each one
-			if any( not l_exon < r_exon for l_exon, r_exon in pairwise(self.exons) ):
+			if any( not exon1 < exon2 for exon1, exon2 in pairwise(self.exons) ):
 				return False
 		
-
+		
 		#If there are introns to check
 		if self.introns:
 			#Check that introns exons are within bounds of the gene
 			if any( intron not in self for intron in self.introns ):
 				return False
-
+			
 			#Check that all introns are properly ordered, and there are gaps between each one
-			if any( not l_intron < r_intron for l_intron, r_intron in pairwise(self.introns) ):
+			if any( not intron1 < intron2 for intron1, intron2 in pairwise(self.introns) ):
 				return False
 		
 		
 		#If there are both exons & introns
 		if self.exons and self.introns:
-			#Check that each exon precedes its following intron, and the two are flush
-			if any( not exon <= intron for exon, intron in zip(self.exons, self.introns) ):
-				return False
-
-			#Check that each intron precedes its following exon, and the two are flush
-			if any( not intron <= exon for intron, exon in zip(self.introns, self.exons[1:]) ):
+			#Check that consecutive exon-intron pairs are properly ordered, and flush
+			if any( not frag1 <= frag2 for frag1, frag2 in pairwise(self.frags()) ):
 				return False
 		
-
+		
 		#If all relevant checks passed, the coordinates are valid
 		return True
 	
@@ -648,21 +617,17 @@ class Gene(GenomicSequence):
 		#If there are exons to check
 		if self.exons:
 			#Check that each pair of exons is mutually linked
-			if any( not l_exon @ r_exon for l_exon, r_exon in pairwise(self.exons) ):
+			if any( not exon1 @ exon2 for exon1, exon2 in pairwise(self.exons) ):
 				return False
 		
 		
 		#If there are both exons & introns
 		if self.exons and self.introns:
-			#Check that each exon and its following intron are mutually linked
-			if any( not exon @ intron for exon, intron in zip(self.exons, self.introns) ):
-				return False
-
-			#Check that each intron and its following exon are mutually linked
-			if any( not intron @ exon for intron, exon in zip(self.introns, self.exons[1:]) ):
+			#Check that consecutive exon-intron pairs are mutually linked
+			if any( not frag1 @ frag2 for frag1, frag2 in pairwise(self.frags()) ):
 				return False
 		
-
+		
 		#If all relevant checks passed, the links are valid
 		return True
 	
@@ -697,16 +662,16 @@ class Gene(GenomicSequence):
 		#If both the transcript & exons have sequences, check that the exons' sequnences match the
 		#transcript's
 		if transcript_seq and exons_seq \
-		and GenomicSequence.concat(self.ordered_exons()) != self.transcript.seq:
+		and concat_genseq(*self.order_exons()) != self.transcript.seq:
 			return False
 		
 		#Likewise, if the gene, the introns & exons all have sequences, check that they match
 		if gene_seq and exons_seq and introns_seq \
-		and GenomicSequence.concat(self.ordered_exons_and_introns()) not in self.seq:
+		and concat_genseq(*self.order_frags()) not in self.seq:
 			return False
 		
 		
-		#If all relevant checks passed, the sequences are valid
+		#If all checks passed, the sequences are valid
 		return True
 
 
@@ -766,8 +731,7 @@ class Exon(GenomicSequence):
 		#If preceeding intron was passed
 		if prev_intron:
 			#Validate input
-			assert prev_intron <= self, \
-				f"Intron-exon misalignment: {prev_intron} & {self}"
+			assert prev_intron <= self
 			
 			#Link exon to intron
 			prev_intron.next_exon = self
@@ -775,8 +739,7 @@ class Exon(GenomicSequence):
 		#If following intron was passed
 		if next_intron:
 			#Validate input
-			assert self <= next_intron, \
-				f"Exon-intron misalignment: {self} & {next_intron}"
+			assert self <= next_intron
 		
 			#Link exon to intron
 			next_intron.prev_exon = self
@@ -789,8 +752,7 @@ class Exon(GenomicSequence):
 		#If gene was passed
 		if gene:
 			#Validate input
-			assert self in gene, \
-				f"{self} outside of {gene}"
+			assert self in gene
 		
 		#Prospectiely link gene to exon
 		self.gene = gene
@@ -799,8 +761,7 @@ class Exon(GenomicSequence):
 		#If preceeding exon was passed
 		if prev_exon:
 			#Validate input
-			assert prev_exon < self,  \
-				f"Exon-exon misalignment: {prev_exon} & {self}"
+			assert prev_exon < self
 			
 			#Link this exon to that one
 			prev_exon.next_exon = self
@@ -808,8 +769,8 @@ class Exon(GenomicSequence):
 		#If following exon was passed
 		if next_exon:
 			#Validate input
-			assert self < next_exon, \
-				f"Exon-exon misalignment: {self} & {next_exon}"
+			assert self < next_intron
+
 			#Link this exon to that one
 			next_exon.prev_exon = self
 		
@@ -818,35 +779,42 @@ class Exon(GenomicSequence):
 		self.next_exon = next_exon
 	
 	
-	def __matmul__(self, other: Exon|Intron) -> bool:
+	def __rmatmul__(self, other: Exon|Intron|None) -> Self|None:
 		"""
-		Check if this exon and a following exon or intron are linked together
-		Call with "self @ other_exon" etc.
-		This test is non-commutative: the left operand is expected to be "before" the right operand
+		Check if this exon and a preceding exon or intron are linked together correctly, to be
+		used via the '@' operator, e.g. "ft1 @ ft2"
+		"ft1 @ ft2" will return ft2 if the linkage was found to be correct, and None if incorrect
+		The result can then be converted to a bool, since GenomicSequence (and subclass) objects
+		are truthy by default, while None is falsy
+		Also, the '@' operator can be chained: "ft1 @ ft2 @ ft3" is equivalent to
+		"ft1 @ ft2 and ft2 @ ft3", and will check the linkage between ft1-ft2 and ft2-ft3 as
+		intended (with ft3 or None as the result)
+		Note that ft1-ft3 isn't checked in this case; crucially, this means that something like
+		"exon1 @ intron @ exon2" might also need a separate "exon1 @ exon2"
 		"""
-		if not isinstance(other, (Exon, Intron)):
-			raise TypeError(f"Can't test links for {type(self).__name__} & {type(other).__name__}")
-				
-		#Get the linked-to exons/intron
-		left = other.prev_exon
-		right = self.next_exon if isinstance(other, Exon) else self.next_intron
+		#If None was passed, this comparison is further down a chain of '@' operators, and an
+		#earlier comparison failed; pass the result further to short circuit
+		if other is None:
+			return None
 		
-		return left and right and (left == self) and (right == other)
-	
-	
-	def __rmatmul__(self, other: Exon|Intron) -> bool:
-		"""
-		Check if this exon and a preceedgin exon or intron are linked together
-		Call with "intron @ self" etc.
-		This test is non-commutative: the left operand is expected to be "before" the right operand
-		"""
 		if not isinstance(other, (Exon, Intron)):
 			raise TypeError(f"Can't test links for {type(other).__name__} & {type(self).__name__}")
-				
-		left = self.prev_exon if isinstance(other, Exon) else self.prev_intron
-		right = other.next_exon
-				
-		return left and right and (left == other) and (right == self)
+		
+		
+		#Get the features pointed to
+		prev = self.prev_exon if isinstance(other, Exon) else self.prev_intron
+		next_ = other.next_exon
+		
+		#Both features must link to each other for the linkage to be correct
+		if prev and next_ and prev == other and next_ == self:
+			return self
+		else:
+			return None
+	
+	
+	#This wrapper around __rmatmul__, needed for it to work correctly
+	def __matmul__(self, other):
+		return other.__rmatmul__(self)
 
 
 class Intron(GenomicSequence):
@@ -863,7 +831,7 @@ class Intron(GenomicSequence):
 	nc_score:    float|None
 	unif_score:  float|None
 	splice_site: str|None
-	trais:       dict[str,bool|float]
+	traits:      dict[str,bool|float]
 
 
 	def __init__(
@@ -883,16 +851,14 @@ class Intron(GenomicSequence):
 		
 		#Validate `gene'
 		if gene:
-			assert self in gene, \
-				f"{self} outside of {gene}"
+			assert self in gene
 		self.gene = gene
 		
 		
 		#If preceeding exon was passed
 		if prev_exon:
 			#Validate input
-			assert prev_exon <= self, \
-				f"Exon-intron misalignment: {prev_exon} & {self}"
+			assert prev_exon <= self
 			
 			#Link this exon to that one
 			prev_exon.next_intron = self
@@ -900,8 +866,7 @@ class Intron(GenomicSequence):
 		#If following exon was passed
 		if next_exon:
 			#Validate input
-			assert self <= next_exon, \
-				f"Intron-exon misalignment: {self} & {next_exon}"
+			assert self <= next_exon
 			#Link this exon to that one
 			next_exon.prev_intron = self
 		
@@ -919,47 +884,111 @@ class Intron(GenomicSequence):
 		self.traits      = {}
 	
 	
+	def __rmatmul__(self, other: Exon|None) -> Self|None:
+		"""
+		Check if this intron and a preceding exon are linked together correctly, to be
+		used via the '@' operator, e.g. "ft1 @ ft2"
+		"ft1 @ ft2" will return ft2 if the linkage was found to be correct, and None if incorrect
+		The result can then be converted to a bool, since GenomicSequence (and subclass) objects
+		are truthy by default, while None is falsy
+		Also, the '@' operator can be chained: "ft1 @ ft2 @ ft3" is equivalent to
+		"ft1 @ ft2 and ft2 @ ft3", and will check the linkage between ft1-ft2 and ft2-ft3 as
+		intended (with ft3 or None as the result)
+		Note that ft1-ft3 isn't checked in this case; crucially, this means that something like
+		"exon1 @ intron @ exon2" might also need a separate "exon1 @ exon2"
+		"""
+		#If None was passed, this comparison is further down a chain of '@' operators, and an
+		#earlier comparison failed; pass the result further to short circuit
+		if other is None:
+			return None
+		
+		#Refuse comparisons with incompatible types
+		if not isinstance(other, Exon):
+			raise TypeError(f"Can't test links for {type(other).__name__} & {type(self).__name__}")
+		
+		
+		#Get the features pointed to
+		prev = self.prev_exon
+		next_ = other.next_intron
+		
+		#Both features must link to each other for the linkage to be correct
+		if prev and next_ and prev == other and next_ == self:
+			return self
+		else:
+			return None
+	
+	
+	def scored(self) -> bool:
+		"""
+		Check if this intron has been scored
+		"""
+		return None not in (self.c_score, self.nc_score, self.unif_score)
+	
+	
+	def has_exons(self) -> bool:
+		"""
+		Check if this intron has surrounding exons
+		"""
+		return bool(self.prev_exon and self.next_exon)
+	
+	
+	def has_seqs(self) -> bool:
+		"""
+		Check if this intron and its surrounding exons all have sequences
+		Implicitly also tests whether the surrounding exons are at all present
+		"""
+		return self.has_exons() and bool(self.seq and self.prev_exon.seq and self.next_exon.seq)
+	
+	
+	def former_exon(self) -> Exon|None:
+		"""
+		Returns the exon preceding this intron in within-gene order
+		"""
+		return self.prev_exon if self.strand == '+' else self.next_exon
+	
+	
+	def latter_exon(self) -> Exon|None:
+		"""
+		Returns the exon followin this intron in within-gene order
+		"""
+		return self.next_exon if self.strand == '+' else self.prev_exon
+	
+
 	def get_variants(self, min_exon_len: int):
 		"""
 		Find possible variants of an intron by examining the nucleotides at exon-intron boundaries
 		and add all of them to self.variants
 		"""
+		#Check that the intron and surrounding exons have sequences
+		assert self.has_seqs()
+		
+		
 		#Get surrounding exons as local variables, to save on typing
 		prev_exon = self.prev_exon
 		next_exon = self.next_exon
 		
 		
-		#Check presence of flanking exons, linkage & coords
-		assert prev_exon, \
-			f"{self} does not have a preceeding exon"
-		assert next_exon, \
-			f"{self} does not have a following exon"
-		assert prev_exon @ next_exon, \
-			f"{prev_exon} & {next_exon} are unlinked"
-		assert prev_exon @ self, \
-			f"{prev_exon} & {self} are unlinked"
-		assert self @ next_exon, \
-			f"{self} & {next_exon} are unlinked"
-		assert prev_exon < next_exon, \
-			f"{prev_exon} & {next_exon} are misordered"
-		assert prev_exon <= self, \
-			f"{prev_exon} & {self} are misordered/unflush"
-		assert self <= next_exon, \
-			f"{self} & {next_exon} are misordered/unflush"
-		assert self.seq, \
-			f"{self.seq} has no sequence"
-		assert prev_exon.seq, \
-			f"{prev_exon.seq} has no sequence"
-		assert next_exon.seq, \
-			f"{next_exon.seq} has no sequence"
+		#Check coordinates & linkage
+		assert prev_exon <= self <= next_exon
+		assert prev_exon @ self @ next_exon and prev_exon @ next_exon
 		
 		
+		#Project what the intron & exons would look like before & after splicing, and validate
+		#these sequences vis-a-vis gene & transcript sequences
+		assert ( pre_mrna_seq := self.former_exon() + self + self.latter_exon() ) in self.gene.seq
+		assert ( mrna_seq := self.former_exon() + self.latter_exon() ) in self.gene.transcript.seq
+		#An additional purpose of these asserts is to initialize `pre_mrna_seq' & `mrna_seq'
+		#The actual purpose of these asserts is to get the values of `pre_mrna_seq' & `mrna_seq'
+		#These two variables are used exclusively in asserts, so they don't need to be initialized
+		#if asserts are disabled - putting the assignments in asserts achieves that
+		
+
 		#prev_exon & next_exon are previous & next in the coordinate sense, which, as long as
-		#the gene in on the positive strand, is also their within-gene order.
+		#the gene in on the positive strand, is also their within-gene order
 		#If the gene is on the negative strand, this is opposite to within-gene order, however,
-		#which would cause variant detection to yield incorrect results.
+		#which would cause variant detection to yield incorrect results
 		#To remedy this, if the gene is on the negative strand, the sequences of the intron & exons
-		#are temporarily reversed.
+		#are temporarily reversed
 		if self.strand == '-':
 			#Backup correctly-oriented sequences
 			self.seq_      = self.seq
@@ -971,16 +1000,6 @@ class Intron(GenomicSequence):
 			next_exon.seq = next_exon.seq[::-1]
 		
 		
-		#Project what the intron & exons would look like before & after splicing 
-		assert ( pre_mrna_seq := prev_exon + self + next_exon )
-		assert ( mrna_seq     := prev_exon + next_exon )
-		#The previous asserts already checked that the exons & intron have sequences, so these
-		#asserts should always pass
-		#The actual purpose of this stanza is to get the values of `pre_mrna_seq' & `mrna_seq'
-		#These two variables are used exclusively in asserts, so they don't need to be initialized
-		#if asserts are disabled - wrapping the assignments in asserts achieves that
-		
-
 		#What shifts are possible depends on the nucleotides at the ends of the
 		#intron and the previous exon (for shifts towards the 5' end), or at
 		#the starts of the intron and the next exon (for shifts towards 3')
@@ -1040,20 +1059,24 @@ class Intron(GenomicSequence):
 				continue
 			
 			
-			#Get shifted intron coordinates
-			#These are also the coordinates for the end of the previous exon, and the start of the
-			#next exon, respectively
-			new_intron_start = self.start + shift
-			new_intron_end   = self.end   + shift
+			#Get coordinates of intron & exon after shifts
+			new_prev_exon_start = prev_exon.start
+			new_prev_exon_end   = prev_exon.end + shift
+
+			new_intron_start    = self.start + shift
+			new_intron_end      = self.end   + shift
+
+			new_next_exon_start = next_exon.start + shift
+			new_next_exon_end   = next_exon.end
 			
 			
 			#Instantiate the variant's flanking exons
 			new_prev_exon = Exon(
-				self.scaffold, self.prev_exon.start, new_intron_start, strand = self.strand,
+				self.scaffold, new_prev_exon_start, new_prev_exon_end, strand = self.strand,
 				gene = self.gene
 			)
 			new_next_exon = Exon(
-				self.scaffold, new_intron_end, self.next_exon.end, strand = self.strand,
+				self.scaffold, new_next_exon_start, new_next_exon_end, strand = self.strand,
 				gene = self.gene, prev_exon = new_prev_exon
 			)
 			
@@ -1084,36 +1107,9 @@ class Intron(GenomicSequence):
 			
 			
 			#Check sequence lengths
-			assert len(new_prev_exon) == new_prev_exon.end - new_prev_exon.start, \
-				f"{new_prev_exon} length mismatch: {len(new_prev_exon)} by seq"
-			assert len(new_intron)    == new_intron.end    - new_intron.start, \
-				f"{new_intron} length mismatch: {len(new_intron)} by seq"
-			assert len(new_next_exon) == new_next_exon.end - new_next_exon.start, \
-				f"{new_next_exon} length mismatch: {len(new_next_exon)} by seq"
-			
-			
-			#Check whether the shift leaves the unspliced sequence untouched
-			assert new_prev_exon.seq + new_intron.seq + new_next_exon.seq == pre_mrna_seq, \
-				f"Variant {shift} of {self} yields different pre-mRNA"
-			
-			#Likewise for the spliced sequence
-			assert new_prev_exon.seq + new_next_exon.seq == mrna_seq, \
-				f"Variant {shift} of {self} yields different mRNA"
-			
-
-			#Check alignment & linkage of exons & intron
-			assert new_prev_exon < new_next_exon, \
-				f"{new_prev_exon} & {new_next_exon} out of order"
-			assert new_prev_exon <= new_intron, \
-				f"{new_prev_exon} & {new_intron} out of order"
-			assert new_intron <= new_next_exon, \
-				f"{new_intron} & {new_next_exon} out of order"
-			assert new_prev_exon @ new_next_exon, \
-				f"{new_prev_exon} & {new_next_exon} unlinked"
-			assert new_prev_exon @ new_intron, \
-				f"{new_prev_exon} & {new_intron} unlinked"
-			assert new_intron @ new_next_exon, \
-				f"{new_intron} & {new_next_exon} unlinked"
+			assert new_prev_exon.valid_len()
+			assert new_intron.valid_len()
+			assert new_next_exon.valid_len()
 			
 			
 			#Undo the new exons' & intron's sequences being reversed if needed
@@ -1122,10 +1118,21 @@ class Intron(GenomicSequence):
 				new_prev_exon.seq = new_prev_exon.seq[::-1]
 				new_next_exon.seq = new_next_exon.seq[::-1]
 			
+			
+			#Check whether the shift leaves the unspliced sequence untouched
+			assert pre_mrna_seq == new_intron.former_exon() + new_intron + new_intron.latter_exon()
+			assert mrna_seq == new_intron.former_exon() + new_intron.latter_exon()
+			
+			
+			#Validate coords & linkage
+			assert new_prev_exon <= new_intron <= new_next_exon
+			assert new_prev_exon @ new_intron @ new_next_exon and new_prev_exon @ new_next_exon
+			
+			
 			#Add variant to list
 			self.variants.append(new_intron)
 		
-		
+
 		#Unreverse the sequences if needed
 		if self.strand == '-':
 			#Restore backups
@@ -1144,61 +1151,37 @@ class Intron(GenomicSequence):
 		If `weighted' is True, the pairing scores will be weighted
 		`pairing_len' is the max number of nucleotides to examine during pairing score calculation
 		"""
+		#Check that the intron and surrounding exons have sequences
+		assert self.has_seqs()
+		
+		#Check coordinates & linkage
+		assert self.prev_exon <= self <= self.next_exon
+		assert self.prev_exon @ self @ self.next_exon and self.prev_exon @ self.next_exon
+		
+		
 		#Get surrounding exons as local variables, to save on typing
-		prev_exon = self.prev_exon
-		next_exon = self.next_exon
-		
-
-		#Check presence of flanking exons, linkage, coords & presence of sequences
-		assert prev_exon, \
-			f"{self} does not have a preceeding exon"
-		assert next_exon, \
-			f"{self} does not have a following exon"
-		assert prev_exon @ next_exon, \
-			f"{prev_exon} & {next_exon} are unlinked"
-		assert prev_exon @ self, \
-			f"{prev_exon} & {self} are unlinked"
-		assert self @ next_exon, \
-			f"{self} & {next_exon} are unlinked"
-		assert prev_exon < next_exon, \
-			f"{prev_exon} & {next_exon} are misordered"
-		assert prev_exon <= self, \
-			f"{prev_exon} & {self} are misordered/unflush"
-		assert self <= next_exon, \
-			f"{self} & {next_exon} are misordered/unflush"
-		assert self.seq, \
-			f"{self.seq} has no sequence"
-		assert prev_exon.seq, \
-			f"{prev_exon.seq} has no sequence"
-		assert next_exon.seq, \
-			f"{next_exon.seq} has no sequence"
+		#Note that the exons are taken in within-gene order
+		prev_exon = self.former_exon()
+		next_exon = self.latter_exon()
 		
 		
-		#prev_exon & next_exon are previous & next in the coordinate sense, which, as long as
-		#the gene in on the positive strand, is also their within-gene order.
-		#If the gene is on the negative strand, this is opposite to within-gene order, and so
-		#the exons need to be switched in that case.
-		if self.strand == '-':
-			prev_exon, next_exon = next_exon, prev_exon
-		
-		
-		#Instantiate trait dictionary
-		#Traits are bools (informing if a given trait is present), with the exception of pairing
-		#scores, which are floats
+		#Re-instantiate trait dictionary
+		#Trait values are bools (informing if a given trait is present), with the exception of
+		#pairing scores, which are floats
 		self.traits: dict[str,bool|float] = {}
 		
 		
 		#Last nucleotide of previous exon is a pyrimidine
-		self.traits["prev_exon_y"] = prev_exon[-1] in "CT"
+		self.traits["prev_exon_y"] = prev_exon[-1] in PYRIMIDINES
 		
 		#First nucleotide of intron is a purine
-		self.traits["intron_r"]    = self[0]       in "AG"
+		self.traits["intron_r"]    = self[0]       in PURINES
 		
 		#Last nucleotide of intron is a pyrimidine
-		self.traits["intron_y"]    = self[-1]      in "CT"
+		self.traits["intron_y"]    = self[-1]      in PYRIMIDINES
 		
 		#First nucleotide of next exon is a purine
-		self.traits["next_exon_r"] = next_exon[0]  in "AG"
+		self.traits["next_exon_r"] = next_exon[0]  in PURINES
 		
 		
 		#CAG & CTG at appropriate positions
@@ -1337,8 +1320,7 @@ class Intron(GenomicSequence):
 		the latter 3 traits are ordinary floats.
 		"""
 		#Check that traits are actually present
-		assert self.traits, \
-			f"{self} does not have traits computed"
+		assert self.traits
 		
 		
 		#Return dummy traits for very short introns
@@ -1405,36 +1387,15 @@ class Intron(GenomicSequence):
 		assert ( allvars := [self] + self.variants )
 		
 		#Validate that the intron and all the variants all have the required information
-		assert all( var.gene                 for var in allvars ), \
-			f"{self} (or a variant) lacks parent gene"
-		assert all( var.gene.name            for var in allvars ), \
-			f"{self} (or a variant) lacks parent gene's name"
-		assert all( var.gene.transcript      for var in allvars ), \
-			f"{self} (or a variant) lacks parent transcript"
-		assert all( var.gene.transcript.name for var in allvars ), \
-			f"{self} (or a variant) lacks parent transcript's name"
-		assert all( var.unif_score != None   for var in allvars ), \
-			f"{self} (or a variant) lacks unified score"
-		assert all( var.c_score    != None   for var in allvars ), \
-			f"{self} (or a variant) lacks conventional score"
-		assert all( var.nc_score   != None   for var in allvars ), \
-			f"{self} (or a variant) lacks nonconventional score"
-		assert all( var.traits               for var in allvars ), \
-			f"{self} (or a variant) lacks computed traits"
-		assert all( var.prev_exon            for var in allvars ), \
-			f"{self} (or a variant) lacks preceding exon"
-		assert all( var.next_exon            for var in allvars ), \
-			f"{self} (or a variant) lacks following exon"
-		assert all( var.seq                  for var in allvars ), \
-			f"{self} (or a variant) lacks sequence"
-		assert all( var.prev_exon.seq        for var in allvars ), \
-			f"{self} (or a variant) lacks sequence of preceding exon"
-		assert all( var.next_exon.seq        for var in allvars ), \
-			f"{self} (or a variant) lacks sequence of following exon"
-		
-		
-		#Check whether the inton is on the positive strand
-		pos: bool = self.strand == '+'
+		#Name of gene & transcript
+		assert all( var.gene.name            for var in allvars )
+		assert all( var.gene.transcript.name for var in allvars )
+		#Scores
+		assert all( var.scored()             for var in allvars )
+		#Traits
+		assert all( var.traits               for var in allvars )
+		#Sequences
+		assert all( var.has_seqs()           for var in allvars )
 		
 		
 		#Measure of certainty of variant selection for this intron
@@ -1452,38 +1413,38 @@ class Intron(GenomicSequence):
 		#Get statistics for the base intron
 		stats.append([
 			#Per-intron stats
-			self.gene.name,										#Name of gene
-			self.gene.transcript.name,							#Name of transcript
-			idx,												#Index of intron within gene
-			len(self.variants),									#Number of variants of intron
-			self.scaffold,										#Scaffold
-			self.strand,										#Strand
-			certainty,											#Certainty of variant selection
+			self.gene.name,							#Name of gene
+			self.gene.transcript.name,				#Name of transcript
+			idx,									#Index of intron within gene
+			len(self.variants),						#Number of variants of intron
+			self.scaffold,							#Scaffold
+			self.strand,							#Strand
+			certainty,								#Certainty of variant selection for intron
 			#Per-variant stats
-			self.start+1,										#Start position
-			self.end,											#End position
-			0,													#Variant's rank
-			self.unif_score,									#Unified score
-			self.c_score,										#Conventionality score
-			self.nc_score,										#Nonconventionality score
-			abs(self.c_score - self.nc_score),					#Variant classification certainty
-			self.splice_site or "",								#Splice site, if available
-			self.traits["ss_is_conv"],							#Is the splice site conventional
-			( self.prev_exon if pos else self.next_exon )[-5:],	#Last  5  nt of prev exon
-			self[:10],											#First 10 nt of intron
-			self[-10:],											#Last  10 nt of intron
-			( self.next_exon if pos else self.prev_exon )[:5],	#First 5  nt of next exon
-			self.traits["prev_exon_y"],							#Is the prev exon's last  nt C or T
-			self.traits["intron_r"],							#Is the intron's    first nt A or G
-			self.traits["intron_y"],							#Is the intron's    last  nt C or T
-			self.traits["next_exon_r"],							#Is the next exon's first nt A or G
-			self.traits["intron_cagctg"],						#Are CAG & CTG present
-			self.traits["pair_score_1"],						#Pairing score
-			self.traits["pair_score_2"],						#Pairing score
-			self.traits["pair_score_3"],						#Pairing score
-			self.traits["pair_3_6"],							#Do positions 3 and -6 pair up
-			self.traits["pair_4_7"],							#Do positions 4 and -7 pair up
-			self.traits["pair_5_8"]								#Do positions 5 and -8 pair up
+			self.start+1,							#Start position
+			self.end,								#End position
+			0,										#Variant's rank
+			self.unif_score,						#Unified score
+			self.c_score,							#Conventionality score
+			self.nc_score,							#Nonconventionality score
+			abs(self.c_score - self.nc_score),		#Certainty of variant classification
+			self.splice_site or "",					#Splice site, if available
+			self.traits["ss_is_conv"],				#Is the splice site conventional
+			self.former_exon()[-5:],				#Last  5  nt of prev exon
+			self[:10],								#First 10 nt of intron
+			self[-10:],								#Last  10 nt of intron
+			self.latter_exon()[:5],					#First 5  nt of next exon
+			self.traits["prev_exon_y"],				#Is the prev exon's last  nt a pyrimidine
+			self.traits["intron_r"],				#Is the intron's    first nt a purine
+			self.traits["intron_y"],				#Is the intron's    last  nt a pyrimidine
+			self.traits["next_exon_r"],				#Is the next exon's first nt A purine
+			self.traits["intron_cagctg"],			#Are the characteristic CAG & CTG present
+			self.traits["pair_score_1"],			#Pairing score
+			self.traits["pair_score_2"],			#Pairing score
+			self.traits["pair_score_3"],			#Pairing score
+			self.traits["pair_3_6"],				#Do the nts at positions 3 and -6 pair up
+			self.traits["pair_4_7"],				#Do the nts at positions 4 and -7 pair up
+			self.traits["pair_5_8"]					#Do the nts at positions 5 and -8 pair up
 		])
 		
 		
@@ -1491,45 +1452,45 @@ class Intron(GenomicSequence):
 		for n, var in enumerate(self.variants, 1):
 			stats.append([
 				#Per-intron stats are only reported for optimal variants
-				"",													#Name of gene
-				"",													#Name of transcript
-				"",													#Index of intron within gene
-				"",													#Number of variants of intron
-				"",													#Scaffold
-				"",													#Strand
-				"",													#Certainty of variant selection
+				"",									#Name of gene
+				"",									#Name of transcript
+				"",									#Index of intron within gene
+				"",									#Number of variants of intron
+				"",									#Scaffold
+				"",									#Strand
+				"",									#Certainty of variant selection for intron
 				#Per-variant stats
-				var.start+1,										#Start position
-				var.end,											#End position
-				n,													#Variant's rank
-				var.unif_score,										#Unified score
-				var.c_score,										#Conventionality score
-				var.nc_score,										#Nonconventionality score
-				abs(var.c_score - var.nc_score),					#Variant classif. certainty
-				var.splice_site or "",								#Splice site, if available
-				var.traits["ss_is_conv"],							#Is the splice site conv.
-				( var.prev_exon if pos else var.next_exon )[-5:],	#Last  5  nt of prev exon
-				var[:10],											#First 10 nt of intron
-				var[-10:],											#Last  10 nt of intron
-				( var.next_exon if pos else var.prev_exon )[:5],	#First 5  nt of next exon
-				var.traits["prev_exon_y"],							#Is the prev exon's last nt C/T
-				var.traits["intron_r"],								#Is the intron's    1st  nt A/G
-				var.traits["intron_y"],								#Is the intron's    last nt C/T
-				var.traits["next_exon_r"],							#Is the next exon's 1st  nt A/G
-				var.traits["intron_cagctg"],						#Are CAG & CTG present
-				var.traits["pair_score_1"],							#Pairing score
-				var.traits["pair_score_2"],							#Pairing score
-				var.traits["pair_score_3"],							#Pairing score
-				var.traits["pair_3_6"],								#Do positions 3 and -6 pair up
-				var.traits["pair_4_7"],								#Do positions 4 and -7 pair up
-				var.traits["pair_5_8"]								#Do positions 5 and -8 pair up
+				var.start+1,						#Start position
+				var.end,							#End position
+				n,									#Variant's rank
+				var.unif_score,						#Unified score
+				var.c_score,						#Conventionality score
+				var.nc_score,						#Nonconventionality score
+				abs(var.c_score - var.nc_score),	#Certainty of variant classification
+				var.splice_site or "",				#Splice site, if available
+				var.traits["ss_is_conv"],			#Is the splice site conventional
+				var.former_exon()[-5:],				#Last  5  nt of prev exon
+				var[:10],							#First 10 nt of intron
+				var[-10:],							#Last  10 nt of intron
+				var.latter_exon()[:5],				#First 5  nt of next exon
+				var.traits["prev_exon_y"],			#Is the prev exon's last  nt a pyrimidine
+				var.traits["intron_r"],				#Is the intron's    first nt a purine
+				var.traits["intron_y"],				#Is the intron's    last  nt a pyrimidine
+				var.traits["next_exon_r"],			#Is the next exon's first nt A purine
+				var.traits["intron_cagctg"],		#Are the characteristic CAG & CTG present
+				var.traits["pair_score_1"],			#Pairing score
+				var.traits["pair_score_2"],			#Pairing score
+				var.traits["pair_score_3"],			#Pairing score
+				var.traits["pair_3_6"],				#Do the nts at positions 3 and -6 pair up
+				var.traits["pair_4_7"],				#Do the nts at positions 4 and -7 pair up
+				var.traits["pair_5_8"]				#Do the nts at positions 5 and -8 pair up
 			])
 		
 		
 		return stats
 	
 	
-	#List of descriptor for every stat returned by Intron.get_stats()
+	#List of descriptors for every stat returned by Intron.get_stats()
 	STATS: list[str] = [
 		#Per-intron stats
 		"gene",
@@ -1546,7 +1507,7 @@ class Intron(GenomicSequence):
 		"unif_score",
 		"c_score",
 		"nc_score",
-		"score_range",
+		"score_delta",
 		"splice_site",
 		"splice_site_is_conv",
 		"e-5",
@@ -1567,6 +1528,12 @@ class Intron(GenomicSequence):
 	]
 
 
+def concat_genseq(*seqs: GenomicSequence, sep: str = '') -> str:
+	"""
+	Given GenomicSequence objects (subclasses also ok), extract the sequence of each one and
+	concatenate them, with an optional separator between each sequence
+	"""
+	return sep.join( map( attrgetter("seq"), seqs ) )
 
 
 
@@ -1590,8 +1557,7 @@ def deserialize_gff(path: str) -> dict[str,Gene]:
 	#for scaffold, source, type_, start, end, strand, 
 	for entry in parse_gff(path):
 		#Ensure each entry has an ID attribute
-		assert "ID" in entry.attrs, \
-			f"No ID attribute in GFF entry '{entry}'"
+		assert "ID" in entry.attrs
 		
 		#Reject features with a '.' strand
 		if entry.strand not in '-+':
@@ -1615,8 +1581,7 @@ def deserialize_gff(path: str) -> dict[str,Gene]:
 		
 		elif type_ == "mRNA":
 			#Ensure that mRNA feature has a Parent
-			assert "Parent" in attrs, \
-				f"No Parent attribute in GFF entry '{entry}'"
+			assert "Parent" in attrs
 			
 			#Submit to conversion table
 			mrna_to_gene[id_] = attrs["Parent"]
@@ -1624,8 +1589,7 @@ def deserialize_gff(path: str) -> dict[str,Gene]:
 
 		elif type_ == "exon":
 			#Ensure that exon feature has a Parent
-			assert "Parent" in attrs, \
-				f"No Parent attribute in GFF entry '{entry}'"
+			assert "Parent" in attrs
 			
 			#Keep track of this exon to add to a gene later
 			deferred_exons.append((attrs["Parent"], scaffold, start, end, strand))
@@ -1634,11 +1598,9 @@ def deserialize_gff(path: str) -> dict[str,Gene]:
 	#Instantiate all exons and link them to their parent gene
 	for mrna_id, scaffold, start, end, strand in deferred_exons:
 		#Get the name of the exon's grandparent gene
-		assert mrna_id in mrna_to_gene, \
-			f"GFF file contains an exon referencing a missing transcript '{mrna_id}'"
+		assert mrna_id in mrna_to_gene
 		gene_id: str = mrna_to_gene[mrna_id]
-		assert gene_id in genes, \
-			f"GFF file contains transcript {mrna_id}, referencing a missing gene '{gene_id}'"
+		assert gene_id in genes
 		
 		
 		#Get the grandparent gene
@@ -1654,8 +1616,7 @@ def deserialize_gff(path: str) -> dict[str,Gene]:
 	
 	#Submit the name of each transcript to its gene
 	for mrna_id, gene_id in mrna_to_gene.items():
-		assert gene_id in genes, \
-			f"GFF file contains transcript {mrna_id}, referencing a missing gene '{gene_id}'"
+		assert gene_id in genes
 		
 		genes[gene_id].transcript.name = mrna_id
 	
@@ -1682,6 +1643,11 @@ PAIR_WEIGHTS: dict[tuple[str,str],float] = {
 
 #Splice sites considered conventional
 CONV_SS: set[str] = { "GTAG", "GCAG", "CTAC", "CTGC" }
+
+
+#Purines & pyrimidines
+PURINES:     str = "AGR"
+PYRIMIDINES: str = "CTY"
 
 
 def test_pairs(seq1: str, seq2: str, weighted: bool = True) -> list[float]:
@@ -1772,8 +1738,7 @@ def score_introns(
 			introns.append(intron)
 			introns += intron.variants
 	
-	assert len(introns) > 0, \
-		"Intron gathering went wrong"
+	assert len(introns) > 0
 	
 	
 	#Compute traits for each intron
@@ -1787,8 +1752,7 @@ def score_introns(
 	ml_traits: list[array] =  [ intron.get_ml_traits() for intron in introns ]
 	
 	#Check number of trait sets
-	assert len(introns) == len(ml_traits), \
-		"Intron trait gathering went wrong"
+	assert len(introns) == len(ml_traits)
 	
 	
 	#Nonconv scores
@@ -1807,8 +1771,7 @@ def score_introns(
 		nc_scores = append(nc_scores, nc_model.predict_proba(batch)[:,1])
 	
 	#Check number of nonconv scores
-	assert len(introns) == len(nc_scores), \
-		"Nonconv scoring went wrong"
+	assert len(introns) == len(nc_scores)
 	
 	
 	#Conv scores
@@ -1823,8 +1786,7 @@ def score_introns(
 		c_scores = append(c_scores, c_model.predict_proba(batch)[:,0])
 	
 	#Check number of nonconv scores
-	assert len(introns) == len(c_scores), \
-		"Conv scoring went wrong"
+	assert len(introns) == len(c_scores)
 	
 	
 	#Convert NumPy arrays to Python list, which also converts NumPy floats to regular Python floats
