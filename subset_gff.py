@@ -31,7 +31,7 @@ require_files( args.gff, args.list )
 
 
 #Deserialize LIST
-fts: set[str] = set( flatten_tsv(args.list) )
+fts: set[str] = set( parse_list(args.list) )
 
 
 #Loop over GFF records

@@ -99,12 +99,20 @@ def parse_tsv(path: str, *, comment_char: str|None = '#', header: int = 0) -> It
 			yield line.split('\t')
 
 
-def flatten_tsv(path, **kwargs) -> Iterator[str]:
+def flatten_tsv(path: str, **kwargs) -> Iterator[str]:
 	"""
 	Yields all fields of every line of a TSV file as part of a single iterator
 	"""
 	return chain.from_iterable(parse_tsv(path, **kwargs))
 
+
+def parse_list(path: str, **kwargs) -> Iterator[str]:
+	"""
+	Given a single-column TSV file, yield each line's contents as part of a single iterator
+	"""
+	for line in parse_tsv(path, **kwargs):
+		assert len(line) == 1
+		yield line[0]
 
 
 ###################################################################################################

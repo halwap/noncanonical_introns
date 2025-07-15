@@ -2,6 +2,7 @@
 
 from argparse import ArgumentParser
 from formats import *
+from collections import defaultdict
 
 ###############################################################################
 
@@ -11,9 +12,6 @@ parser = ArgumentParser()
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
-parser.add_argument("attr", metavar="ATTR", nargs='?',
-					help = "Name of attribute to optionally report",
-					type = str)
 
 args = parser.parse_args()
 
@@ -22,12 +20,20 @@ args = parser.parse_args()
 require_files( args.gff )
 
 
+#Will hold the number of children of each feature
+child_cnt: dict[str,int] = defaultdict(int)
+
+
 #Loop over GFF records
 for entry in parse_gff(args.gff):
-	#If a specific attribute was requested, and the given attribute posesses it
-	if args.attr and args.attr in entry.attrs:
-		#Report ID & requested attribute
-		print(to_tsv( entry.attrs["ID"], entry.attrs[args.attr] ))
-	#If no attribute was requested, report just the ID
-	elif not args.attr:
-		print(entry.attrs["ID"])
+	#Instantiate this ID's record if necessary
+	child_cnt[entry.attrs["ID"]]
+	
+	#Count the current feature, if it is a child
+	if "Parent" in entry.attrs:
+		child_cnt[entry.attrs["Parent"]] += 1
+
+
+#Print children counts
+for id_, cnt in child_cnt.items():
+	print(to_tsv( id_, cnt ))

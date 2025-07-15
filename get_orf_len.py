@@ -12,7 +12,6 @@ parser = ArgumentParser()
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
-
 parser.add_argument("fasta", metavar="FASTA",
 					help = "FASTA file referenced by GFF",
 					type = str)

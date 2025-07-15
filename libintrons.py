@@ -174,6 +174,8 @@ class GenomicSequence:
 		"""
 		return self.comparable(other) and self.start == other.start and other.end == self.end
 	
+
+	
 	
 	def to_gff(self, type_: str = "sequence_feature", **attrs: str) -> GFF:
 		"""
@@ -368,7 +370,7 @@ class Gene(GenomicSequence):
 		Build a list of variants for each intron in the gene
 		"""
 		for intron in self.introns:
-			intron.get_variants(min_exon_len)
+			intron.add_variants(min_exon_len)
 	
 	
 	def rectify_introns(self):
@@ -812,9 +814,37 @@ class Exon(GenomicSequence):
 			return None
 	
 	
-	#This wrapper around __rmatmul__, needed for it to work correctly
+	#Thin wrapper around __rmatmul__, needed for it to work correctly
 	def __matmul__(self, other):
 		return other.__rmatmul__(self)
+	
+	
+	def former_exon(self) -> Exon|None:
+		"""
+		Returns the exon preceding this exon in within-gene order
+		"""
+		return self.prev_exon if self.strand == '+' else self.next_exon
+	
+	
+	def latter_exon(self) -> Exon|None:
+		"""
+		Returns the exon following this exon in within-gene order
+		"""
+		return self.next_exon if self.strand == '+' else self.prev_exon
+	
+	
+	def former_intron(self) -> Intron|None:
+		"""
+		Returns the intron preceding this intron in within-gene order
+		"""
+		return self.prev_intron if self.strand == '+' else self.next_intron
+	
+	
+	def latter_intron(self) -> Intron|None:
+		"""
+		Returns the intron following this exon in within-gene order
+		"""
+		return self.next_intron if self.strand == '+' else self.prev_intron
 
 
 class Intron(GenomicSequence):
@@ -949,12 +979,12 @@ class Intron(GenomicSequence):
 	
 	def latter_exon(self) -> Exon|None:
 		"""
-		Returns the exon followin this intron in within-gene order
+		Returns the exon following this intron in within-gene order
 		"""
 		return self.next_exon if self.strand == '+' else self.prev_exon
 	
-
-	def get_variants(self, min_exon_len: int):
+	
+	def add_variants(self, min_exon_len: int):
 		"""
 		Find possible variants of an intron by examining the nucleotides at exon-intron boundaries
 		and add all of them to self.variants
@@ -1535,6 +1565,27 @@ def concat_genseq(*seqs: GenomicSequence, sep: str = '') -> str:
 	"""
 	return sep.join( map( attrgetter("seq"), seqs ) )
 
+
+def hash_genseq(seq: GenomicSequence) -> int:
+	"""
+	Hash function for GenomicSequence (& subclass) objects
+	The intention of this hashing function is that if a pair of objects would evaluate as equal
+	using the '==' operator, they have identical hashes
+	This function can be hooked up to the GenomicSequence class to make it hashable:
+	"GenomicSequence.__hash__ = hash_genseq"
+	"""
+	return hash(f"{seq.scaffold} {seq.start} {seq.end} {seq.strand}")
+
+
+def hash_genseq_unstranded(seq: GenomicSequence) -> int:
+	"""
+	Hash function for GenomicSequence (& subclass) objects
+	Unlike hash_genseq(), two objects will have identical hashes if they have the same scaffold
+	and coordinates, but not necessarily the same strand
+	This function can be hooked up to the GenomicSequence class to make it hashable:
+	"GenomicSequence.__hash__ = hash_genseq"
+	"""
+	return hash(f"{seq.scaffold} {seq.start} {seq.end}")
 
 
 ###################################################################################################

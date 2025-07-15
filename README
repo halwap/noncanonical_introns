@@ -18,6 +18,11 @@ extras.py
 
 ------------------------            SCRIPTS            ------------------------
 
+add_attribs.py
+	Given a GFF, the name of an attribute file & a TSV file listing
+	feature IDs and attribute values, create/overwrite the atribute with
+	the given value for each listed feature
+
 add_introns.py
 	Given a GFF, interpose introns between each pair of exons
 	If the GFF's referened FASTA is supplied, the introns will have their
@@ -26,6 +31,13 @@ add_introns.py
 apply_adoptions.py
 	Given the output of prepare_adoptions.py and a GFF, apply the adoptions
 	listed
+
+count_children.py
+	Given a GFF, count how many children each contained feature has
+
+enumerate_frags.py
+	Given a GFF, generate IDs for exons & introns which are based on their
+	order within the gene
 
 extract_attrib.py
 	Given a GFF and the name of an attribute, extract and list the value of
