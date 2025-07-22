@@ -19,7 +19,7 @@ extras.py
 ------------------------            SCRIPTS            ------------------------
 
 add_attribs.py
-	Given a GFF, the name of an attribute file & a TSV file listing
+	Given a GFF, the name of an attribute & a TSV file listing
 	feature IDs and attribute values, create/overwrite the atribute with
 	the given value for each listed feature
 
@@ -34,6 +34,10 @@ apply_adoptions.py
 
 count_children.py
 	Given a GFF, count how many children each contained feature has
+
+del_attrib.py
+	Given a GFF, the name of an attribute & a list of feature IDs, remove
+	the given attribute from listed entries
 
 enumerate_frags.py
 	Given a GFF, generate IDs for exons & introns which are based on their
