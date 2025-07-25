@@ -88,8 +88,15 @@ rectify_introns.py
 	Given a GFF & FASTA, find and score all intron variants, then select
 	the  variant for each intron
 
+rename_attr.py
+	Given a GFF, the current name of an attribute, and a new name of the
+	attribute, rename that attribute in all entries
+
 subset_gff.py
 	Given a GFF & a list of feature IDs, subset the GFF file to
 	exclude/include	the listed features and all of their children
 	Assumes every feature in the GFF with a Parent attribute comes after
 	its parent
+
+xchg_attrs.py
+	Given a GFF & two attribute names, swap their values in all entries
