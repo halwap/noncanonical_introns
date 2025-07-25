@@ -98,5 +98,8 @@ subset_gff.py
 	Assumes every feature in the GFF with a Parent attribute comes after
 	its parent
 
+undo_gmap_dir.py
+	Given a GFF output by GMAP, undo its strand rectification
+
 xchg_attrs.py
 	Given a GFF & two attribute names, swap their values in all entries
