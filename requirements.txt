@@ -1,6 +1,9 @@
-matplotlib
-tabulate
 Bio
 scikit-learn
+numpy
+
+#TODO: are any of these actually necessary?
+matplotlib
+tabulate
 more_itertools
 gffpandas
