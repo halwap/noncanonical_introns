@@ -69,6 +69,10 @@ get_ft_len.py
 get_orf_len.py
 	Given a GFF & FASTA, report the length of each transcript's longest ORF
 
+group_by_parent.gff
+	Given a GFF, group features such that children of the same parent belong in
+	the same group
+
 group_features.py
 	Given a GFF, group features based on if they overlap one another
 
@@ -88,9 +92,17 @@ rectify_introns.py
 	Given a GFF & FASTA, find and score all intron variants, then select
 	the  variant for each intron
 
+rectify_strand.py
+	Given a GFF & FASTA and several data files, apply corrections to the GFF's
+	strand information
+
 rename_attr.py
 	Given a GFF, the current name of an attribute, and a new name of the
 	attribute, rename that attribute in all entries
+
+set_ft_type.py
+	Given a GFF, a list of feature IDs and the name of a feature type, replace
+	the listed features' type with the given type
 
 subset_gff.py
 	Given a GFF & a list of feature IDs, subset the GFF file to

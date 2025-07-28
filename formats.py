@@ -132,7 +132,7 @@ class GFF:
 	type_:  str
 	start:  int
 	end:    int
-	score:  Optional[float]
+	score:  Optional[float|int]
 	strand: Strand
 	phase:  Optional[int]
 	attrs:  dict[str,str]
@@ -145,10 +145,10 @@ class GFF:
 		type_:  str,
 		start:  int,
 		end:    int,
-		score:  Optional[float] = None,
-		strand: Strand          = '.',
-		phase:  Optional[int]   = None,
-		attrs:  dict[str,str]   = {}
+		score:  Optional[float|int] = None,
+		strand: Strand              = '.',
+		phase:  Optional[int]       = None,
+		attrs:  dict[str,str]       = {}
 	):
 		"""
 		Initialize a GFF entry
@@ -179,7 +179,11 @@ class GFF:
 		Initialize an instance based on a tab-split line taken from a GFF file
 		"""
 		assert len(fields) == 9, \
-			f"GFF entry has wrong number of fields: {line}"
+			f"GFF entry has wrong number of fields: {fields}"
+		
+		#Convert score: None if '.', to int if formatted as int, to float if formatted as float
+		score = fields[5]
+		score = None if score == '.' else ( int(score) if score.isnumeric() else float(score) )
 		
 		return cls(
 					seqid  = fields[0],
@@ -187,7 +191,7 @@ class GFF:
 					type_  = fields[2],
 					start  = int(fields[3]),
 					end    = int(fields[4]),
-					score  = float(fields[5]) if fields[5] != '.' else None,
+					score  = score,
 					strand = fields[6],
 					phase  = int(fields[7]) if fields[7] != '.' else None,
 					attrs  = GFF.attr_to_dict( fields[8] )

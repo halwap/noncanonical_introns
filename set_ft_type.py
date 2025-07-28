@@ -11,11 +11,11 @@ parser = ArgumentParser()
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
-parser.add_argument("attr", metavar="ATTR",
-					help = "Name of attribute to delete",
+parser.add_argument("type", metavar="TYPE",
+					help = "New feature type",
 					type = str)
 parser.add_argument("list", metavar="LIST",
-					help = "File containing IDs to modify",
+					help = "List of feature IDs to modify",
 					type = str)
 
 args = parser.parse_args()
@@ -26,12 +26,12 @@ require_files( args.gff, args.list )
 
 
 #Get new value of attribute for listed features
-attrs: set[str] = set( parse_list( args.list ) )
+list_: set[str] = set( parse_list( args.list ) )
 
 
 #Loop over GFF records
 for entry in parse_gff(args.gff):
-	#If the entry is a listed one and has the given attribute, remove it
-	if entry.attrs["ID"] in attrs and args.attr in entry.attrs:
-		del entry.attrs[args.attr]
+	#If the entry is a listed one, set its feature type
+	if entry.attrs["ID"] in list_:
+		entry.type_ = args.type
 	print( entry )

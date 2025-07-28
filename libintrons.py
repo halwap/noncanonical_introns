@@ -521,6 +521,10 @@ class Gene(GenomicSequence):
 			if intron.splice_site:
 				attrs["splice_site"] = intron.splice_site
 			
+			#Report number of variants, if adding variants was requested
+			if intron.variants is not None:
+				attrs["variant_cnt"] = str(len(intron.variants))
+			
 			#Report scores if available
 			if introns_scored:
 				attrs["conv_score"] = str(intron.c_score)
@@ -856,7 +860,7 @@ class Intron(GenomicSequence):
 	gene:        Gene|None
 	prev_exon:   Exon|None
 	next_exon:   Exon|None
-	variants:    list[Intron]
+	variants:    list[Intron]|None
 	c_score:     float|None
 	nc_score:    float|None
 	unif_score:  float|None
@@ -906,7 +910,7 @@ class Intron(GenomicSequence):
 		
 		
 		#Attributes whose specific values are to be computed later
-		self.variants    = []
+		self.variants    = None
 		self.c_score     = None
 		self.nc_score    = None
 		self.unif_score  = None
@@ -1081,7 +1085,11 @@ class Intron(GenomicSequence):
 		while pref_len < right_bound and self[pref_len] == next_exon[pref_len]:
 			pref_len += 1
 		
-
+		
+		#Instantiate/reset list of variants
+		self.variants = []
+		
+		
 		#Iterate over all possible shift values
 		for shift in range(-suff_len, pref_len+1):
 			#Skip a shift value of 0, since it means no shift
@@ -1162,7 +1170,7 @@ class Intron(GenomicSequence):
 			#Add variant to list
 			self.variants.append(new_intron)
 		
-
+		
 		#Unreverse the sequences if needed
 		if self.strand == '-':
 			#Restore backups
@@ -1173,6 +1181,17 @@ class Intron(GenomicSequence):
 			del self.seq_
 			del prev_exon.seq_
 			del next_exon.seq_
+	
+	
+	def add_splice_site(self):
+		"""
+		Compute the splice site an intron, and save it under the `splice_site' attribute
+		Will be None if the intron is less than 4 nt long
+		"""
+		assert self.seq
+		
+		self.splice_site: str|None = self[:2] + self[-2:] if len(self) >= 4 else None
+	
 	
 	
 	def add_traits(self, weighted: bool = True, pairing_len: int = 21):
@@ -1220,9 +1239,9 @@ class Intron(GenomicSequence):
 		self.traits["intron_cagctg"] = self.traits["intron_cag"] and self.traits["intron_ctg"]
 		
 		
-		#Add splice site; will be None, if the intron is < 4 nucleotides
+		#Add splice site
 		#The splice site is its own attribute, not a trait
-		self.splice_site: str = self[:2] + self[-2:] if len(self) >= 4 else None
+		self.add_splice_site()
 		
 		#Intron has a conventional splice site
 		self.traits["ss_is_conv"] = self.splice_site in CONV_SS
