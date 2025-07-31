@@ -46,9 +46,9 @@ for gene in genes.values():
 
 #Deserialize gene groups if it was passed, or put all genes in the GFF into a single group
 if args.groups:
-	groups: list[list[str]] = list[ parse_tsv(args.groups) ]
+	groups: list[list[str]] = list( parse_tsv(args.groups) )
 else:
-	groups: list[Iterable[str]] = [ genes.keys() ]
+	groups: list[Iterable[str]] = list(genes.keys())
 
 
 for group in groups:
