@@ -17,7 +17,7 @@ parser.add_argument("fasta", metavar="FASTA",
 					help = "FASTA file referenced by GFF",
 					type = str)
 parser.add_argument("groups", metavar="GROUPS", nargs='?',
-					help = "File with gene groups",
+					help = "List of 'gene' feature groups",
 					type = str)
 
 #Flags

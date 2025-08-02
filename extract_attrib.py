@@ -12,7 +12,7 @@ parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
 parser.add_argument("attr", metavar="ATTR", nargs='?',
-					help = "Name of attribute to optionally report",
+					help = "Attribute to optionally report",
 					type = str)
 
 args = parser.parse_args()

@@ -33,15 +33,15 @@ for entry in parse_gff(args.gff):
 	
 	#Swap
 	if attr1 is not None and attr2 is not None:
-		entry.attrs[attr1] = attr2
-		entry.attrs[attr2] = attr1
+		entry.attrs[args.attr1] = attr2
+		entry.attrs[args.attr2] = attr1
 	
 	elif attr1 is not None:
-		entry.attrs[attr2] = attr1
-		del entry.attrs[attr1]
+		entry.attrs[args.attr2] = attr1
+		del entry.attrs[args.attr1]
 
 	elif attr2 is not None:
-		entry.attrs[attr1] = attr2
-		del entry.attrs[attr2]
+		entry.attrs[args.attr1] = attr2
+		del entry.attrs[args.attr2]
 
 	print( entry )

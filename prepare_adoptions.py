@@ -10,10 +10,10 @@ parser = ArgumentParser()
 
 #Positional argument
 parser.add_argument("pairs", metavar="PAIRS",
-					help = "TSV file containing pairs of features IDs",
+					help = "List of pairs of features",
 					type = str)
 parser.add_argument("lengths", metavar="LENGTHS",
-					help = "TSV file contatining the length of each feature",
+					help = "List of feature lengths",
 					type = str)
 
 args = parser.parse_args()

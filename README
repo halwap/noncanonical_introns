@@ -18,7 +18,7 @@ extras.py
 
 ------------------------            SCRIPTS            ------------------------
 
-add_attribs.py
+add_attrib.py
 	Given a GFF, the name of an attribute & a TSV file listing
 	feature IDs and attribute values, create/overwrite the atribute with
 	the given value for each listed feature
@@ -69,7 +69,7 @@ get_ft_len.py
 get_orf_len.py
 	Given a GFF & FASTA, report the length of each transcript's longest ORF
 
-group_by_parent.gff
+group_by_parent.py
 	Given a GFF, group features such that children of the same parent belong in
 	the same group
 
@@ -79,6 +79,9 @@ group_features.py
 introns_corn.py
 	Given a GFF, mark each intron possessing a "splice_site" attribute as
 	conventional or nonconventional, based on the splice site sequence
+
+list_by_type.py
+	Given a GFF & a list of type(s), list all features of the given types
 
 prepare_adoptions.py
 	Given the output of find_altseq_gff.py and the output of get_ft_len.py,
@@ -100,9 +103,18 @@ rename_attr.py
 	Given a GFF, the current name of an attribute, and a new name of the
 	attribute, rename that attribute in all entries
 
+rename_type.py
+	Given a GFF, the current name of a type, and a new name of the type,
+	rename that type for all relevant entries
+
 set_ft_type.py
 	Given a GFF, a list of feature IDs and the name of a feature type, replace
 	the listed features' type with the given type
+
+split_gff.py
+	Given a GFF & a list of feature IDs, create two files - one containing all
+	listed features, along with their lineages, and one excluding all listed
+	features, along with as much of their lineages as possible
 
 subset_gff.py
 	Given a GFF & a list of feature IDs, subset the GFF file to

@@ -12,10 +12,10 @@ parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
 parser.add_argument("attr1", metavar="ATTR1",
-					help = "Name of attribute to modify",
+					help = "Current name of attribute",
 					type = str)
 parser.add_argument("attr2", metavar="ATTR2",
-					help = "New name for the attribute",
+					help = "New name for attribute",
 					type = str)
 
 args = parser.parse_args()

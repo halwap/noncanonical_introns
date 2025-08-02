@@ -9,7 +9,7 @@ parser = ArgumentParser()
 
 #Positional arguments
 parser.add_argument("pairs", metavar="PAIRS",
-					help = "TSV file containing pairs of features IDs",
+					help = "List of pairs of features",
 					type = str)
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",

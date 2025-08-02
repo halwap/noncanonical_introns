@@ -15,7 +15,7 @@ parser.add_argument("type", metavar="TYPE",
 					help = "New feature type",
 					type = str)
 parser.add_argument("list", metavar="LIST",
-					help = "List of feature IDs to modify",
+					help = "List of features to modify",
 					type = str)
 
 args = parser.parse_args()

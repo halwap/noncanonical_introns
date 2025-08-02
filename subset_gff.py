@@ -12,7 +12,7 @@ parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
 parser.add_argument("list", metavar="LIST",
-					help = "File containing features to keep",
+					help = "List of features to include",
 					type = str)
 
 #Options

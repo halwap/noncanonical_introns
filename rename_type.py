@@ -11,27 +11,21 @@ parser = ArgumentParser()
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
-parser.add_argument("attr", metavar="ATTR",
-					help = "Name of attribute to add",
+parser.add_argument("prev", metavar="TYPE1",
+					help = "Old feature type",
 					type = str)
-parser.add_argument("list", metavar="LIST",
-					help = "List of features to modify, w/ new attribute values",
+parser.add_argument("new", metavar="TYPE1",
+					help = "New feature type",
 					type = str)
 
 args = parser.parse_args()
 
 ###############################################################################
 
-require_files( args.gff, args.list )
+require_files( args.gff )
 
 
-#Get new value of attribute for listed features
-attrs: dict[str,str] = dict( parse_tsv( args.list ) )
-
-
-#Loop over GFF records
 for entry in parse_gff(args.gff):
-	#If the entry is a listed one, modify its attributes
-	if entry.attrs["ID"] in attrs:
-		entry.attrs[args.attr] = attrs[entry.attrs["ID"]]
+	if entry.type_ == args.prev:
+		entry.type_ = args.new
 	print( entry )

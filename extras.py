@@ -206,3 +206,128 @@ def min_of_each(*iters: Iterable[Any], key: Callable = lambda x: x) -> Iterator[
 		yield min(iter_, key=key)
 
 
+def bifurcate_gff(entries: Iterable['GFF'], mask: Iterable[str]) -> tuple[set[str], set[str]]:
+	"""
+	Given a list of GFF entries and a list of entry IDs, split the IDs of all fetures in `entries'
+	into two sets, such that one set includes the entries in `mask', along with all their lineages,
+	and the other set excludes the entries in `mask', and as much of their lineage as possible
+	"""
+	#The two sets to be returned
+	inc: set[str] = set()
+	exc: set[str] = set()
+	
+	#Keys: IDs of features which have children; values: IDs of a given feature's children
+	children: dict[str:set[str]] = defaultdict(set)
+	#Keys: IDs of child features; values: ID of a given feature's parent
+	parents: dict[str:str] = dict()
+	
+	
+	#Populate `exc' (with all IDs in `entries', for now) and `children'
+	for entry in entries:
+		assert "ID" in entry.attrs
+		exc.add(entry.attrs["ID"])
+		if "Parent" in entry.attrs:
+			children[ entry.attrs["Parent"] ].add( entry.attrs["ID"] )
+			parents[ entry.attrs["ID"] ] = entry.attrs["Parent"]
+	
+	
+	def descendants(id_) -> set[str]:
+		"""
+		Get all descendants of a given feature
+		"""
+		out = set()
+		
+		for child in children[id_]:
+			#Add immediate children
+			out.add(child)
+			#Recursively add further descendants
+			out.update(descendants(child))
+		
+		return out
+	
+	
+	def singular_ancestors(id_) -> set[str]:
+		"""
+		Get the ancestors of a given feature, up to the oldest ancestor which does not have any
+		additional children
+		"""
+		out = set()
+		
+		while id_ in parents and len(children[ parents[id_] ]) == 1:
+			id_ = parents[id_]
+			out.add(id_)
+		
+		return out
+	
+	
+	def ancestors(id_) -> set[str]:
+		"""
+		Get all ancestors of a given feature
+		"""
+		out = set()
+		
+		while id_ in parents:
+			id_ = parents[id_]
+			out.add(id_)
+		
+		return out
+	
+	
+	def lineage(id_) -> set[str]:
+		"""
+		Get the entire lineage on which a given feature lies, i.e. a set containing the (IDs of)
+		the feature, all its descendants, and all its ancestors
+		"""
+		out: set[str] = descendants(id_) | ancestors(id_)
+		out.add(id_)
+		return out
+	
+	
+	def delete(id_):
+		"""
+		Delete a feature from `exc' and unlink it from its parent & children
+		"""
+		exc.remove(id_)
+		#Unlink this feature from its children
+		if id_ in children:
+			for child in children[id_]:
+				del parents[child]
+			del children[id_]
+		#Unlink this feature from its parent
+		if id_ in parents:
+			children[ parents[id_] ].remove(id_)
+			del parents[id_]
+	
+	
+	#Move features from `exc' to `inc'
+	for id_ in mask:
+		#If the feature was moved already
+		if id_ not in exc:
+			continue
+		
+		
+		#Move children
+		for child in descendants(id_):
+			#Add feature to `inc'
+			inc.add(child)
+			#Remove from `exc' and unlink
+			delete(child)
+		
+		
+		#Get singular and all ancestors
+		sanc = singular_ancestors(id_)
+		anc = ancestors(id_)
+		
+		#Move feature
+		inc.add(id_)
+		delete(id_)
+		
+		#Move singular ancestors, copy non-singular ancestors
+		for ancestor in anc:
+			inc.add(ancestor)
+			if ancestor in sanc:
+				delete(ancestor)
+	
+	
+	return inc, exc
+

@@ -14,8 +14,8 @@ parser.add_argument("gff", metavar="GFF",
 parser.add_argument("attr", metavar="ATTR",
 					help = "Name of attribute to delete",
 					type = str)
-parser.add_argument("list", metavar="LIST",
-					help = "File containing IDs to modify",
+parser.add_argument("list", metavar="LIST", nargs='?',
+					help = "List of features to modify",
 					type = str)
 
 args = parser.parse_args()
@@ -25,13 +25,11 @@ args = parser.parse_args()
 require_files( args.gff, args.list )
 
 
-#Get new value of attribute for listed features
-attrs: set[str] = set( parse_list( args.list ) )
+if args.list:
+	ids: set[str] = set( parse_list( args.list ) )
 
 
-#Loop over GFF records
 for entry in parse_gff(args.gff):
-	#If the entry is a listed one and has the given attribute, remove it
-	if entry.attrs["ID"] in attrs and args.attr in entry.attrs:
+	if ( args.list is None or entry.attrs["ID"] in ids ) and args.attr in entry.attrs:
 		del entry.attrs[args.attr]
 	print( entry )
