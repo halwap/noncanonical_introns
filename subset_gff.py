@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -22,6 +22,16 @@ parser.add_argument("-v", "--invert",
 parser.add_argument("-D", "--deadbeat",
 					help = "Children features are kept/discarded independently of their parents",
 					action = "store_true", default = False)
+
+parser.description = """
+Filter GFF to only include features in LIST, along with their children.
+"""
+
+parser.epilog = """
+LIST is a listfile of feature IDs.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from itertools import combinations
 from libintrons import *
 from extras import are_altseq
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -27,6 +27,22 @@ parser.add_argument("-U", "--unstranded",
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",
 					help = "Minimal shared sequence length to count as altseq hit",
 					type = int, default = 1)
+
+parser.description = """
+Find pairs of 'mRNA' features in GFF which may originate from alternative
+sequencing of what is actually the same sequence. If GROUPS is passed, features
+are only examined within their own groups.
+"""
+
+parser.epilog = """
+GFF is expected to be similar to GMAP's output: 1 'mRNA' feature per 'gene',
+>=1 'exon' per 'mRNA'. Other feature types ignored.
+
+Each line of GROUPS contains tab-separated IDs fo 'gene' features.
+This can be the output of group_by_parent.py or group_features.py.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

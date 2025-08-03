@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -17,6 +17,16 @@ parser.add_argument("attr", metavar="ATTR",
 parser.add_argument("list", metavar="LIST", nargs='?',
 					help = "List of features to modify",
 					type = str)
+
+parser.description = """
+Process GFF to remove attribute ATTR based on LIST.
+"""
+
+parser.epilog = """
+LIST is a listfile of feature IDs.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

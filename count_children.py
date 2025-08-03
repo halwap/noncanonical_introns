@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from collections import defaultdict
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
+
+parser.description = """
+Count the number of children each feature in GFF has.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from extras import bifurcate_gff
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -26,6 +26,17 @@ parser.add_argument("out2", metavar="OUTFILE2",
 parser.add_argument("-f", "--force",
 					help = "Force overwriting of generated file(s) if they exist",
 					action = "store_true", default = False)
+
+parser.description = """
+Split GFF into OUTFILE1 & OUTFILE2, such that features in LIST are included in
+OUTFILE1 and excluded from OUTFILE2. Feature lineages are preserved.
+"""
+
+parser.epilog = """
+LIST is a listfile of feature IDs.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

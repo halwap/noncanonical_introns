@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from itertools import combinations
 from extras import are_altseq
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("fasta", metavar="FASTA",
@@ -21,6 +21,15 @@ parser.add_argument("-U", "--unstranded",
 parser.add_argument("-l", "--shared-seq-len", metavar="LEN",
 					help = "Minimal shared sequence length to count as altseq hit",
 					type = int, default = 1)
+
+parser.description = """
+Find pairs of sequences in FASTA which may originate from alternative
+sequencing of what is actually the same sequence.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

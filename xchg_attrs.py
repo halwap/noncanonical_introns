@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -17,6 +17,14 @@ parser.add_argument("attr1", metavar="ATTR1",
 parser.add_argument("attr2", metavar="ATTR2",
 					help = "Name of another attribute",
 					type = str)
+
+parser.description = """
+Swap attributes ATTR2 & ATTR2 for every feature in GFF.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

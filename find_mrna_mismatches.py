@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from libintrons import *
 from Bio.Align import PairwiseAligner
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -29,6 +29,17 @@ parser.add_argument("-c", "--count",
 parser.add_argument("-A", "--align",
 					help = "Report alignments in addition listing occurences",
 					action = "store_true", default = False)
+
+parser.description = """
+Given GFF output by GMAP as a result of mapping XCRIPTS to FASTA, find 'mRNA'
+features whose sequences do not match their original transcripts.
+"""
+
+parser.epilog = """
+GFF is expected to be GMAP output, or very closely similar to it in format.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

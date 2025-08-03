@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("pairs", metavar="PAIRS",
@@ -19,6 +19,18 @@ parser.add_argument("gff", metavar="GFF",
 parser.add_argument("-t", "--type", metavar="TYPE",
 					help = "Optional new type for deserted features",
 					type = str, default = None)
+
+parser.description = """
+Apply adoptions described in PAIRS to GFF.
+"""
+
+parser.epilog = """
+PAIRS is a 2-column TSV. Field 1 is a feature's ID, field 2 is the ID of
+another feature, to which the original feature's children should be moved.
+This can be the output of prepare_adoptions.py.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from libintrons import *
 from pathlib import Path
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -44,6 +44,21 @@ parser.add_argument("-C", "--force-conv-variants",
 parser.add_argument("-U", "--unweighted-pairing-scores",
 					help = "Use unweighted pairing scores in intron scoring",
 					action = "store_true", default = False)
+
+parser.description = """
+Find introns in GFF, select the best set of coordinates for movable ones, and
+output to OUTFILE. Optionally write statistics of this process to STATS.
+"""
+
+parser.epilog = """
+GFF is expected to be similar to GMAP's output: 1 'mRNA' feature per 'gene',
+>=1 'exon' per 'mRNA'. Other feature types ignored.
+
+In case of 'vanishing exons', pass a small positive integer to -E.
+
+Any path, except for the ones passed to -n/-c, can be '-' to read from stdin or
+write to stdout.
+"""
 
 args = parser.parse_args()
 

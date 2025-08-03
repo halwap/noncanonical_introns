@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("fasta", metavar="FASTA",
@@ -23,6 +23,26 @@ parser.add_argument("orfs", metavar="ORFS",
 parser.add_argument("scores", metavar="SCORES",
 					help = "Three-column mapping intron scores",
 					type = str)
+
+parser.description = """
+Determine the best orientation for every transcript, and apply this orientation
+to transcript mappings in GFF.
+"""
+
+parser.epilog = """
+GFF should be GMAP output, or of similar format to it.
+
+BLASTX is a 2-column TSV with BLASTX results, matching BLAST's
+'6 qseqid qstrand' output format specifier.
+
+ORFS is 'longest_orfs.gff3' as output by TD2, filtered to 'CDS' features only.
+
+SCORES is a 3-column TSV. Field 1 is a 'gene' feature ID, fields 2 & 3 are its
+mean intron scores when scored as-is and in inverted orientation, respectively.
+
+Any path can be '-' to read from stdin. Writes rectified GFF to stdout, and
+rectification statistics to stderr.
+"""
 
 args = parser.parse_args()
 

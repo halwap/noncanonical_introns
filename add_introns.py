@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from libintrons import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -19,6 +19,17 @@ parser.add_argument("fasta", metavar="FASTA", nargs='?',
 parser.add_argument("-E", "--min-exon-len", metavar="LEN",
 					help = "The shortest an exon can become as a result of intron shifting",
 					type = int, default = 1)
+
+parser.description = """
+Add introns to GFF.
+"""
+
+parser.epilog = """
+GFF is expected to be similar to GMAP's output: 1 'mRNA' feature per 'gene',
+>=1 'exon' per 'mRNA'. Other feature types ignored.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

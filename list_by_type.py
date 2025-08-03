@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -14,6 +14,16 @@ parser.add_argument("gff", metavar="GFF",
 parser.add_argument("list", metavar="LIST", nargs='?',
 					help = "List of types to report",
 					type = str)
+
+parser.description = """
+List all features in GFF of one of given types.
+"""
+
+parser.epilog = """
+LIST is a listfile of feature types.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from libintrons import CONV_SS
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
 					help = "GFF file to process",
 					type = str)
+
+parser.description = """
+Mark each 'intron' feature in GFF with 'splice_site' attribute as conventional
+or nonconventional.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

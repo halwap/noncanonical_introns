@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from extras import merge_sets
 from itertools import combinations
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -27,6 +27,14 @@ parser.add_argument("-r", "--rough",
 parser.add_argument("-M", "--multi-elem",
 					help = "Only print groups containing multiple elements",
 					action = "store_true", default = False)
+
+parser.description = """
+Group features in GFF based on seqid and coordinates.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

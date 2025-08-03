@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 from collections import defaultdict
 from operator import attrgetter
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -21,6 +21,16 @@ parser.add_argument("-0", "--zero",
 parser.add_argument("-S", "--scaffold",
 					help = "Order by position on scaffold, not within gene",
 					action = "store_true", default = False)
+
+parser.description = """
+Generate new ordinal IDs for all 'exon' & 'intron' features.
+"""
+
+parser.epilog = """
+Output can be passed to add_attrib.py to apply new IDs.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

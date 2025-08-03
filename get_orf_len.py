@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from libintrons import *
 from extras import max_orf_len
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -20,6 +20,17 @@ parser.add_argument("fasta", metavar="FASTA",
 parser.add_argument("-U", "--unstranded",
 					help = "Examine both strands",
 					action = "store_true", default = False)
+
+parser.description = """
+Get length of the longest ORF in every 'mRNA' feature in GFF.
+"""
+
+parser.epilog = """
+GFF is expected to be similar to GMAP's output: 1 'mRNA' feature per 'gene',
+>=1 'exon' per 'mRNA'. Other feature types ignored.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 

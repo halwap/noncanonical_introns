@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from formats import *
 
 ###############################################################################
 
-parser = ArgumentParser()
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
 
 #Positional arguments
 parser.add_argument("gff", metavar="GFF",
@@ -14,6 +14,16 @@ parser.add_argument("gff", metavar="GFF",
 parser.add_argument("attr", metavar="ATTR", nargs='?',
 					help = "Attribute to optionally report",
 					type = str)
+
+parser.description = """
+Report value of attribute ATTR for every feature in GFF which has it.
+"""
+
+parser.epilog = """
+If ATTR is not passed, all feature IDs are listed instead.
+
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
 
 args = parser.parse_args()
 
