@@ -73,6 +73,7 @@ for entry1,entry2 in combinations(entries, 2):
 	#If the two entries should belong in the same group, submit them to `pairs'
 	if same_group:
 		pairs.append( (entry1.attrs["ID"], entry2.attrs["ID"]) )
+		continue
 
 
 #Merge pairs into complete groups
