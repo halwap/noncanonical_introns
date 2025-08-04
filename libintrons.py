@@ -498,7 +498,7 @@ class Gene(GenomicSequence):
 		attrs = { "ID": self.name }
 		#If all introns have been scored, report the average score in attributes
 		if introns_scored:
-			attrs["score"] = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
+			attrs["intron_score"] = str( mean( map( attrgetter("unif_score" ), self.introns ) ))
 		
 		entries.append( super().to_gff("gene", **attrs) )
 		
