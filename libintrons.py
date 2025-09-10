@@ -1712,7 +1712,7 @@ PAIR_WEIGHTS: dict[tuple[str,str],float] = {
 
 
 #Splice sites considered conventional
-CONV_SS: set[str] = { "GTAG", "GCAG", "CTAC", "CTGC" }
+CONV_SS: set[str] = { "GTAG", "GCAG" }
 
 
 #Purines & pyrimidines
