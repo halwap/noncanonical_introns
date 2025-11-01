@@ -331,3 +331,24 @@ def bifurcate_gff(entries: Iterable['GFF'], mask: Iterable[str]) -> tuple[set[st
 	
 	return inc, exc
 
+
+def get_aln_layout(alignment: 'Bio.Align.Alignment') -> str:
+	"""
+	Given a Bio.Align.Alignment, get a string describing the layout of the alignment, i.e. a string
+	which describes which positions of the alignment are matches, mismatches or gaps.
+	'|' means match, '.' means mismatch, ' ' means gap.
+	"""
+	out: str = ""
+	
+	for n1, n2 in zip(alignment[0], alignment[1]):
+		#Match
+		if n1 == n2:
+			out += '|'
+		#Gap
+		elif n1 == '-' or n2 == '-':
+			out += ' '
+		#Mismatch
+		else:
+			out += '.'
+	
+	return out

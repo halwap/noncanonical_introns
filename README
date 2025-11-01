@@ -83,6 +83,11 @@ introns_corn.py
 list_by_type.py
 	Given a GFF & a list of type(s), list all features of the given types
 
+mrna_align_stats.py
+	Given a transcriptome-to-genome mapping GFF, a genome FASTA and a
+	transcriptome FASTA, align each mapping to its original transcript sequence
+	and report alignment statistics.
+
 prepare_adoptions.py
 	Given the output of find_altseq_gff.py and the output of get_ft_len.py,
 	determine which transcript mappings collectively originate from the
