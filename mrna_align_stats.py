@@ -83,7 +83,7 @@ for gene_id in genes.keys():
 	
 	
 	#Compute alignment
-	if args.unstranded
+	if args.unstranded:
 		#If both strands are to be examined, get the configuration which yields
 		#a higher score
 		revcomp = reverse_complement(gff_seq)
