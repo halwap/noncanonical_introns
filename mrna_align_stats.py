@@ -43,12 +43,11 @@ args = parser.parse_args()
 require_files( args.gff, args.genome, args.xcripts )
 
 
-if args.align:
-	aln = PairwiseAligner()
-	aln.mode = "global"
-	#Disable penalty for leading & trailing gaps
-	aln.left_gap_score=0
-	aln.right_gap_score=0
+aln = PairwiseAligner()
+aln.mode = "global"
+#Disable penalty for leading & trailing gaps
+aln.left_gap_score=0
+aln.right_gap_score=0
 
 
 #Load genes, automatically creating introns with variants
