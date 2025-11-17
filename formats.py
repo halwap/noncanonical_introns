@@ -297,6 +297,19 @@ class GFF:
 		
 		#Check for overlap
 		return self.seqid == other.seqid and self.start <= other.end and other.start <= self.end
+	
+	
+	def coincides(self, other: Self, *, unstranded: bool = False) -> bool:
+		"""
+		Determine if a pair of entries have the same coordinates
+		If `unstranded' is True, the entries' strand is ignored for the comparison
+		"""
+		#Check that the entries have the same strand, if `unstranded' is False
+		if not unstranded and self.strand != other.strand:
+			return False
+		
+		#Check for identical coords
+		return self.seqid == other.seqid and self.start <= other.end and other.start <= self.end
 
 
 def parse_gff(path: str) -> Iterator[GFF]:

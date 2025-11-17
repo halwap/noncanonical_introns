@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from formats import *
+from extras import merge_sets
+from itertools import combinations
+
+###############################################################################
+
+parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter)
+
+#Positional arguments
+parser.add_argument("gff", metavar="GFF",
+					help = "GFF file to process",
+					type = str)
+
+#Flags
+parser.add_argument("-t", "--type", metavar="TYPE",
+					help = "Only consider features of type TYPE",
+					type = str, default = "")
+parser.add_argument("-S", "--stranded",
+					help = "Include strand information when grouping",
+					action = "store_true", default = False)
+parser.add_argument("-M", "--multi-elem",
+					help = "Only print groups containing multiple elements",
+					action = "store_true", default = False)
+
+parser.description = """
+Group features in GFF such that all features with the same coordinates belong
+to the same group.
+"""
+
+parser.epilog = """
+Any path can be '-' to read from stdin. Writes to stdout.
+"""
+
+args = parser.parse_args()
+
+###############################################################################
+
+require_files( args.gff )
+
+
+#Get GFF entries
+if args.type:
+	entries = list( entry for entry in parse_gff(args.gff) if entry.type_ == args.type )
+else:
+	entries = list( entry for entry in parse_gff(args.gff) )
+
+#If no matching entries were found, exit early
+if not entries:
+	eprint("No matching entries found in GFF file")
+	exit()
+
+
+#Will hold every pair of 2 entries which should end up in the same group
+pairs: list[tuple[str,str]] = []
+
+
+#Iterate over all unique pairs of entries in `entries'
+for entry1,entry2 in combinations(entries, 2):
+	#Determine if the two entries should belong in the same group
+	#If yes, submit their IDs to `pairs'
+	if entry1.coincides(entry2, unstranded = not args.stranded):
+		pairs.append( (entry1.attrs["ID"], entry2.attrs["ID"]) )
+		continue
+
+
+#Merge pairs into complete groups
+groups: list[set[str]] = merge_sets(pairs)
+
+
+#Report groups
+for group in groups:
+	print(to_tsv( *group ))
+
+
+#If single-element groups were requested, print them also
+if not args.multi_elem:
+	#Get the set of all IDs
+	ids: set[str] = set( entry.attrs["ID"] for entry in entries )
+	
+	#Remove IDs already printed
+	for group in groups:
+		ids -= group
+	
+	
+	#Print all remaining IDs as remaining single-element groups
+	for id_ in ids:
+		print(id_)

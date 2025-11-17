@@ -73,6 +73,9 @@ group_by_parent.py
 	Given a GFF, group features such that children of the same parent belong in
 	the same group
 
+group_dupes.py
+	Given a GFF, group features based on if they have the same coordinates
+
 group_features.py
 	Given a GFF, group features based on if they overlap one another
 
