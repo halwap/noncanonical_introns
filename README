@@ -32,6 +32,10 @@ apply_adoptions.py
 	Given the output of prepare_adoptions.py and a GFF, apply the adoptions
 	listed
 
+bulk_retype.py
+	Given a GFF & a TSV file listing feature IDs and the name of a type, change
+	each listed feature to the listed type
+
 count_children.py
 	Given a GFF, count how many children each contained feature has
 
