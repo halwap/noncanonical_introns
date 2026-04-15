@@ -1,5 +1,5 @@
 from intron_comparison import process_file
-from introns import Intron
+from src.introns import Intron
 from statistics import median
 from itertools import chain
 from collections import defaultdict

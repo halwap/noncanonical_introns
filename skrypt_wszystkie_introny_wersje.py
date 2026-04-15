@@ -1,6 +1,6 @@
 import os
 
-import introns
+import src.introns as introns
 from collections import defaultdict
 
 

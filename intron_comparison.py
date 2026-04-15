@@ -1,4 +1,4 @@
-from introns import Intron
+from src.introns import Intron
 from collections import defaultdict
 
 

@@ -1,10 +1,9 @@
-import introns
-from Bio import SeqIO
+from src.load_genomes import read_genome, read_genes
 
 
 def prepare_transcripts(gtf_path, genome_path, fasta_out_path):
-    genome = introns.read_genome(genome_path)
-    genes = introns.read_genes(gtf_path)
+    genome = read_genome(genome_path, 'fasta')
+    genes = read_genes(gtf_path, 'gtf')
     for_print = []
     for name, gene in genes.items():
         gene.extract_sequence(genome)

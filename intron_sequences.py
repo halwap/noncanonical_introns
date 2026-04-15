@@ -1,4 +1,4 @@
-from introns import Intron
+from src.introns import Intron
 import re
 import collections, functools, operator
 from collections import defaultdict

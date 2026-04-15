@@ -1,6 +1,6 @@
 import os
 import sys
-import introns
+import src.introns as introns
 from collections import defaultdict
 from Bio import SeqIO
 from Bio.Seq import Seq
